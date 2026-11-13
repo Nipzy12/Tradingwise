@@ -17,6 +17,37 @@ async function encrypt(env,value){const iv=crypto.getRandomValues(new Uint8Array
 async function decrypt(env,value){const [v,c]=String(value).split('.');if(!v||!c)throw Error('Corrupt session');const buf=await crypto.subtle.decrypt({name:'AES-GCM',iv:decode(v)},await encKey(env),decode(c));return JSON.parse(new TextDecoder().decode(buf));}
 const cookie=(name,value,maxAge)=>`${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
 function config(env){return Boolean(env.CTRADER_CLIENT_ID&&env.CTRADER_CLIENT_SECRET&&env.CTRADER_SESSION_KEY&&env.CTRADER_REDIRECT_URI&&env.DB)}
+// Run before redirecting users: avoid consuming a 60-second OAuth code when storage or encryption is misconfigured.
+async function readiness(env){
+ const checks={sessionKey:false,database:false,redirectUri:false};
+ if(!config(env))return checks;
+ try{
+  const u=new URL(env.CTRADER_REDIRECT_URI);
+  checks.redirectUri=u.protocol==='https:'&&u.origin==='https://tradingwise.vercel.app'&&u.pathname===PREFIX+'/oauth/callback';
+ }catch{}
+ try{const raw=decode(env.CTRADER_SESSION_KEY);if(raw.byteLength===32){await encKey(env);checks.sessionKey=true}}catch{}
+ try{await env.DB.prepare('SELECT 1 FROM ctrader_sessions LIMIT 1').all();checks.database=true}catch{}
+ return checks;
+}
+const ready=x=>x.sessionKey&&x.database&&x.redirectUri;
+const oauthMessage=Object.freeze({
+ TOKEN_NETWORK_ERROR:'Gagal menghubungi server token cTrader; ulangi otorisasi.',
+ TOKEN_INVALID_RESPONSE:'Respons server token cTrader tidak valid; ulangi otorisasi.',
+ TOKEN_REJECTED:'cTrader menolak pertukaran kode OAuth. Cek kredensial aplikasi dan gunakan kode login baru (berlaku 60 detik).',
+ TOKEN_MISSING_FIELDS:'Respons token cTrader tidak memiliki data autentikasi lengkap.',
+ SESSION_STORE_FAILED:'Token diterima tetapi sesi tidak dapat disimpan. Periksa enkripsi dan database Cloudflare.',
+ CALLBACK_FAILED:'Callback cTrader gagal pada backend. Ulangi otorisasi.',
+ CONFIG_NOT_READY:'Konfigurasi enkripsi, database, atau Redirect URI belum siap.'
+});
+class OAuthFailure extends Error{
+ constructor(code,extra){super(code);this.code=code;this.extra=extra||null}
+}
+function oauthError(code,status=502,extra){
+ const body={error:oauthMessage[code]||oauthMessage.CALLBACK_FAILED,code};
+ if(extra&&typeof extra.provider_code==='string'&&/^[A-Z][A-Z0-9_]{0,47}$/.test(extra.provider_code))body.provider_code=extra.provider_code;
+ if(extra&&Number.isInteger(extra.provider_status)&&extra.provider_status>=400&&extra.provider_status<=599)body.provider_status=extra.provider_status;
+ return json(body,status);
+}
 function secure(resp){resp.headers.set('cache-control','no-store, private');resp.headers.set('referrer-policy','no-referrer');resp.headers.set('x-content-type-options','nosniff');return resp}
 async function saveSession(env,sid,tokens){
  const time=Date.now(),expiry=time+SESSION_MS;
@@ -26,10 +57,16 @@ async function saveSession(env,sid,tokens){
 async function tokenRequest(env,params){
  const url=new URL('https://openapi.ctrader.com/apps/token');
  for(const [k,v] of Object.entries({...params,client_id:env.CTRADER_CLIENT_ID,client_secret:env.CTRADER_CLIENT_SECRET}))url.searchParams.set(k,v);
- const response=await fetch(url,{headers:{accept:'application/json'},redirect:'error'});
- if(!response.ok)throw Error('cTrader OAuth exchange failed');
- const data=await response.json();if(!data.accessToken||!data.refreshToken||data.errorCode)throw Error('cTrader OAuth token was rejected');
- return {accessToken:data.accessToken,refreshToken:data.refreshToken,expiresAt:Date.now()+Number(data.expiresIn||2628000)*1000};
+ let response;
+ try{response=await fetch(url,{headers:{accept:'application/json'},redirect:'error'})}
+ catch{throw new OAuthFailure('TOKEN_NETWORK_ERROR')}
+ let data;
+ try{data=await response.json()}catch{throw new OAuthFailure('TOKEN_INVALID_RESPONSE')}
+ const code=typeof data?.errorCode==='string'&&/^[a-zA-Z][a-zA-Z0-9_]{0,47}$/.test(data.errorCode)?data.errorCode.toUpperCase():undefined;
+ if(!response.ok||data?.errorCode)throw new OAuthFailure('TOKEN_REJECTED',{provider_code:code,provider_status:response.status});
+ if(typeof data?.accessToken!=='string'||typeof data?.refreshToken!=='string'||!data.accessToken||!data.refreshToken)throw new OAuthFailure('TOKEN_MISSING_FIELDS');
+ const seconds=Number(data.expiresIn||2628000);
+ return {accessToken:data.accessToken,refreshToken:data.refreshToken,expiresAt:Date.now()+(Number.isFinite(seconds)&&seconds>0?seconds:2628000)*1000};
 }
 async function currentSession(req,env){
  const sid=getCookies(req)[COOKIE];if(!sid||!/^[-_A-Za-z0-9]{35,80}$/.test(sid))return null;
@@ -53,8 +90,13 @@ async function callback(req,env){
  // cTrader OAuth may not echo a custom state parameter on every server version. We require it, fail closed.
  if(!code||!incoming||!stored||!safeEqual(incoming,stored))return err('cTrader OAuth state validation failed. Restart authorization.',400);
  if(code.length>2048)return err('Authorization code too long',400);
- const tokens=await tokenRequest(env,{grant_type:'authorization_code',code,redirect_uri:env.CTRADER_REDIRECT_URI});
- const sid=random();await saveSession(env,sid,tokens);
+ // Do not request a token until the session key, database and redirect URI pass preflight.
+ if(!ready(await readiness(env)))return oauthError('CONFIG_NOT_READY',503);
+ let tokens;
+ try{tokens=await tokenRequest(env,{grant_type:'authorization_code',code,redirect_uri:env.CTRADER_REDIRECT_URI})}
+ catch(e){return oauthError(e instanceof OAuthFailure?e.code:'CALLBACK_FAILED',502,e instanceof OAuthFailure?e.extra:null)}
+ const sid=random();
+ try{await saveSession(env,sid,tokens)}catch{return oauthError('SESSION_STORE_FAILED',503)}
  const resp=redirect('https://tradingwise.vercel.app/?ctrader=connected');
  resp.headers.append('set-cookie',cookie(COOKIE,sid,Math.floor(SESSION_MS/1000)));
  resp.headers.append('set-cookie',cookie(STATE_COOKIE,'',0));return resp;
@@ -117,12 +159,12 @@ async function candles(env,tokens,params){
 }
 export default {async fetch(request,env){
  const path=new URL(request.url).pathname,params=new URL(request.url).searchParams;
- if(path===PREFIX+'/health')return json({ok:true,configured:config(env),scope:'accounts',mode:'oauth-read-only',requiresAccountConsent:true,synthetic:false});
+ if(path===PREFIX+'/health'){const checks=await readiness(env);return json({ok:true,configured:config(env)&&ready(checks),checks,scope:'accounts',mode:'oauth-read-only',requiresAccountConsent:true,synthetic:false});}
  if(!path.startsWith(PREFIX+'/'))return err('Not found',404);
  if(!config(env))return err('cTrader connector configuration incomplete',503);
- if(request.method==='GET'&&path===PREFIX+'/oauth/start')return oauthStart(env);
+ if(request.method==='GET'&&path===PREFIX+'/oauth/start')return ready(await readiness(env))?oauthStart(env):oauthError('CONFIG_NOT_READY',503);
  if(request.method==='GET'&&path===PREFIX+'/oauth/callback'){
-  try{return await callback(request,env)}catch{return err('cTrader authorization failed; review redirect URI and application access',502)}
+  try{return await callback(request,env)}catch{return oauthError('CALLBACK_FAILED',502)}
  }
  if(request.method==='POST'&&path===PREFIX+'/logout'){
   const source=request.headers.get('origin');if(source&&new URL(source).origin!==new URL(env.CTRADER_REDIRECT_URI).origin)return err('Invalid origin',403);
