@@ -3,5 +3,11 @@
   "framework": null,
   "buildCommand": "node scripts/build-static.mjs",
   "outputDirectory": "dist",
-  "installCommand": "echo 'No third-party npm dependencies required' "
+  "installCommand": "echo 'No third-party npm dependencies required' ",
+  "rewrites": [
+    {
+      "source": "/api/ctrader/:path*",
+      "destination": "https://tradingwise-ctrader.nexoraz.workers.dev/api/ctrader/:path*"
+    }
+  ]
 }
