@@ -32,6 +32,7 @@ async function readiness(env){
 const ready=x=>x.sessionKey&&x.database&&x.redirectUri;
 const oauthMessage=Object.freeze({
  TOKEN_NETWORK_ERROR:'Gagal menghubungi server token cTrader; ulangi otorisasi.',
+ TOKEN_REDIRECT_BLOCKED:'Endpoint cTrader mengembalikan redirect yang tidak diharapkan; pertukaran token dihentikan untuk keamanan.',
  TOKEN_INVALID_RESPONSE:'Respons server token cTrader tidak valid; ulangi otorisasi.',
  TOKEN_REJECTED:'cTrader menolak pertukaran kode OAuth. Cek kredensial aplikasi dan gunakan kode login baru (berlaku 60 detik).',
  TOKEN_MISSING_FIELDS:'Respons token cTrader tidak memiliki data autentikasi lengkap.',
@@ -58,8 +59,11 @@ async function tokenRequest(env,params){
  const url=new URL('https://openapi.ctrader.com/apps/token');
  for(const [k,v] of Object.entries({...params,client_id:env.CTRADER_CLIENT_ID,client_secret:env.CTRADER_CLIENT_SECRET}))url.searchParams.set(k,v);
  let response;
- try{response=await fetch(url,{headers:{accept:'application/json'},redirect:'error'})}
+ // Cloudflare Workers does not implement fetch redirect:"error": it throws a TypeError
+ // even for HTTP 200. Manual mode prevents implicit forwarding of OAuth codes and secrets.
+ try{response=await fetch(url,{headers:{accept:'application/json'},redirect:'manual'})}
  catch{throw new OAuthFailure('TOKEN_NETWORK_ERROR')}
+ if(response.status>=300&&response.status<400)throw new OAuthFailure('TOKEN_REDIRECT_BLOCKED');
  let data;
  try{data=await response.json()}catch{throw new OAuthFailure('TOKEN_INVALID_RESPONSE')}
  const code=typeof data?.errorCode==='string'&&/^[a-zA-Z][a-zA-Z0-9_]{0,47}$/.test(data.errorCode)?data.errorCode.toUpperCase():undefined;
