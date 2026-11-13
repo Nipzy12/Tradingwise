@@ -114,7 +114,16 @@ async function connectOpenApi(env,isLive=false){
  const close=(why='cTrader socket closed')=>{for(const [,x] of pending){clearTimeout(x.timer);x.reject(Error(why))}pending.clear();try{ws.close(1000,'done')}catch{}};
  ws.addEventListener('message',event=>{
   let packet;try{packet=JSON.parse(typeof event.data==='string'?event.data:'')}catch{return}
-  if(packet.payloadType===PROTO.ERROR){close('cTrader protocol error');return}
+  if(packet.payloadType===PROTO.ERROR){
+   // cTrader's 2142 error exposes a documented errorCode. Only forward a strict
+   // code enum and our own request stage; never forward provider descriptions.
+   const raw=packet.payload?.errorCode;
+   const code=typeof raw==='string'&&/^[A-Z][A-Z0-9_]{0,63}$/.test(raw)?raw:'UNKNOWN_ERROR';
+   const type=pending.get(packet.clientMsgId)?.type;
+   const stage=({[PROTO.APP_AUTH_REQ]:'APP_AUTH',[PROTO.ACCOUNT_LIST_REQ]:'ACCOUNT_LIST',[PROTO.ACCOUNT_AUTH_REQ]:'ACCOUNT_AUTH',[PROTO.SYMBOLS_REQ]:'SYMBOLS',[PROTO.TRENDBARS_REQ]:'TRENDBARS'})[type]||'GATEWAY';
+   close('cTrader '+stage+': '+code);
+   return;
+  }
   const id=packet.clientMsgId;const item=pending.get(id);
   if(item&&packet.payloadType===item.expected){clearTimeout(item.timer);pending.delete(id);item.resolve(packet.payload||{})}
  });
@@ -122,17 +131,33 @@ async function connectOpenApi(env,isLive=false){
  const request=(type,payload,expected)=>new Promise((resolve,reject)=>{
   const id=`tw_${Date.now()}_${++seq}`;
   const timer=setTimeout(()=>{pending.delete(id);reject(Error('cTrader request timed out'))},11000);
-  pending.set(id,{resolve,reject,expected,timer});
+  pending.set(id,{resolve,reject,expected,type,timer});
   try{ws.send(JSON.stringify({clientMsgId:id,payloadType:type,payload}))}catch(e){clearTimeout(timer);pending.delete(id);reject(Error('cTrader connection send failed'))}
  });
  try{await request(PROTO.APP_AUTH_REQ,{clientId:env.CTRADER_CLIENT_ID,clientSecret:env.CTRADER_CLIENT_SECRET},PROTO.APP_AUTH_RES)}catch(e){close('cTrader application authentication failed');throw e}
  return {request,close};
 }
-async function accounts(env,tokens){
- const conn=await connectOpenApi(env,false);
- try{const data=await conn.request(PROTO.ACCOUNT_LIST_REQ,{accessToken:tokens.accessToken},PROTO.ACCOUNT_LIST_RES);
-  return (data.ctidTraderAccount||[]).map(a=>({accountId:String(a.ctidTraderAccountId),isLive:Boolean(a.isLive),brokerTitle:a.brokerTitle||'',traderLogin:String(a.traderLogin||'')})).filter(a=>/^\d+$/.test(a.accountId));
+async function accountsFromEndpoint(env,tokens,isLive){
+ const conn=await connectOpenApi(env,isLive);
+ try{
+  const data=await conn.request(PROTO.ACCOUNT_LIST_REQ,{accessToken:tokens.accessToken},PROTO.ACCOUNT_LIST_RES);
+  return (Array.isArray(data.ctidTraderAccount)?data.ctidTraderAccount:[])
+   .map(a=>({accountId:String(a.ctidTraderAccountId),isLive:Boolean(a.isLive),brokerTitle:a.brokerTitle||'',traderLogin:String(a.traderLogin||'')}))
+   .filter(a=>/^\d{1,20}$/.test(a.accountId));
  }finally{conn.close()}
+}
+async function accounts(env,tokens){
+ // cTrader explicitly separates live and demo servers. Check both, so a
+ // live-only account isn't silently missing behind a demo-only catalog.
+ const results=await Promise.allSettled([
+  accountsFromEndpoint(env,tokens,false),
+  accountsFromEndpoint(env,tokens,true)
+ ]);
+ const good=results.filter(r=>r.status==='fulfilled');
+ if(!good.length)throw results[0].reason;
+ const unique=new Map();
+ for(const result of good)for(const item of result.value)unique.set(item.accountId,item);
+ return [...unique.values()];
 }
 async function withAccount(env,tokens,accountId,handler){
  const list=await accounts(env,tokens),a=list.find(a=>a.accountId===String(accountId));if(!a)throw Error('Unauthorized cTrader account');
