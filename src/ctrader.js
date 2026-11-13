@@ -8,7 +8,7 @@ async function get(path){
  if(!r.ok)throw Object.assign(Error(body.error||`cTrader API HTTP ${r.status}`),{status:r.status});
  return body;
 }
-export function startCtraderLogin(){location.assign(PATH+'/oauth/start')}
+export async function startCtraderLogin(){const status=await get('/health');if(!status.configured)throw Error('Koneksi cTrader belum siap: kredensial backend harus dipasang di Cloudflare Dashboard.');location.assign(PATH+'/oauth/start')}
 export async function ctraderSession(){return get('/session')}
 export async function ctraderAccounts(){const data=await get('/accounts');return data.accounts||[]}
 export async function ctraderAccountId(){
