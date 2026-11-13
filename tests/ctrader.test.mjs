@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {normalizeTrendbars,ctraderId,parseCtraderId,lightSymbols,TIMEFRAMES,PROTO} from '../edge/ctrader-protocol.mjs';
 import worker from '../edge/ctrader-worker.mjs';
 const origin='https://tradingwise.vercel.app';
-const env={CTRADER_CLIENT_ID:'test-app',CTRADER_CLIENT_SECRET:'fake-not-a-credential',CTRADER_SESSION_KEY:'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',CTRADER_REDIRECT_URI:origin+'/api/ctrader/oauth/callback',DB:{}};
+const env={CTRADER_CLIENT_ID:'test-app',CTRADER_CLIENT_SECRET:'fake-not-a-credential',CTRADER_SESSION_KEY:'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',CTRADER_REDIRECT_URI:origin+'/api/ctrader/oauth/callback',DB:{prepare:()=>({all:async()=>({results:[]})})}};
 test('cTrader account+symbol IDs cannot inject arbitrary URL/path',()=>{
  assert.equal(ctraderId('123','456'),'CTRADER:123:456');assert.deepEqual(parseCtraderId('CTRADER:123:456'),{accountId:'123',symbolId:'456'});
  assert.throws(()=>parseCtraderId('CTRADER:https://evil.test'),/Invalid/);assert.throws(()=>ctraderId('123','../../foo'),/Invalid/);
