@@ -136,6 +136,7 @@ const serverAlertState={rules:[],events:[],status:null};
 const ALERT_TYPES=[['SMC_ZONE_INVALIDATED','Zona invalidated'],['SMC_NEW_BUY_PLAN','New BUY plan'],['SMC_NEW_SELL_PLAN','New SELL plan'],['SMC_ENTRY_BUY','ENTRY BUY'],['SMC_ENTRY_SELL','ENTRY SELL'],['SMC_TAKE_PROFIT','TAKE PROFIT'],['SMC_STOP_LOSS','STOP LOSS']];
 function authToken(){let token=sessionStorage.getItem('lumavun-alert-token');if(!token){token=prompt('Masukkan ALERT_ADMIN_TOKEN dari konfigurasi server (hanya disimpan sampai tab ditutup):')?.trim();if(token)sessionStorage.setItem('lumavun-alert-token',token)}return token}
 async function alertAPI(path,{method='GET',body}={}){
+ if(/\.vercel\.app$/i.test(location.hostname))throw Error('Alert server SMC persisten hanya aktif pada backend Node. Cloudflare Free saat ini menyediakan market data, bukan alert 24/7.');
  const token=authToken();if(!token)throw Error('Token admin diperlukan untuk mengelola webhook');
  const res=await fetch('/api/alerts/'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store'});
  const data=await res.json().catch(()=>({}));if(!res.ok){if(res.status===401)sessionStorage.removeItem('lumavun-alert-token');throw Error(data.error||'Alert API HTTP '+res.status)}return data;
