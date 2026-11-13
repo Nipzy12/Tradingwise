@@ -30,14 +30,15 @@ class BrokerSocket {
   const error=this.scenario.errors?.[mode]?.[msg.payloadType];
   if(error) {
    payloadType=2142;
-   payload={errorCode:error,description:'DO_NOT_EXPOSE_broker_description_or_tokens'};
+   payload={errorCode:error,description:this.scenario.descriptions?.[mode]?.[msg.payloadType]||'DO_NOT_EXPOSE_broker_description_or_tokens'};
+   if(this.scenario.genericError)payloadType=50;
   }else if(msg.payloadType===2100)payloadType=2101;
   else if(msg.payloadType===2149){
    payloadType=2150;
    payload={ctidTraderAccount:this.scenario.accounts?.[mode]||[]};
   }else throw Error('Unexpected message: '+msg.payloadType);
   queueMicrotask(()=>{
-   if(!this.closed)this.events.message?.({data:JSON.stringify({payloadType,payload,clientMsgId:msg.clientMsgId})});
+   if(!this.closed)this.events.message?.({data:JSON.stringify({payloadType,payload,...(error&&this.scenario.omitErrorMsgId?{}:{clientMsgId:msg.clientMsgId})})});
   });
  }
  close(){this.closed=true}
@@ -118,5 +119,47 @@ test('protocol error sanitizes malicious provider code without leaking descripti
   const r=await worker.fetch(new Request(origin+'/api/ctrader/accounts',{headers:{cookie}}),env);
   assert.equal(r.status,502);
   assert.match((await r.json()).error,/APP_AUTH: UNKNOWN_ERROR/);
+ });
+});
+
+test('cTrader protocol error without request ID is attributed to pending APP_AUTH',async()=>{
+ const scenario={omitErrorMsgId:true,
+  errors:{demo:{2100:'INVALID_REQUEST'},live:{2100:'INVALID_REQUEST'}},
+  descriptions:{
+   demo:{2100:'Message missing required fields: clientId. random-token=PRIVATE'},
+   live:{2100:'Message missing required fields: clientId. random-token=PRIVATE'}
+  }};
+ await runWithBroker(scenario,async({env,cookie})=>{
+  const r=await worker.fetch(new Request(origin+'/api/ctrader/accounts',{headers:{cookie}}),env);
+  assert.equal(r.status,502);
+  const data=await r.json();
+  assert.match(data.error,/APP_AUTH: INVALID_REQUEST \(MISSING_CLIENTID\)/);
+  assert.doesNotMatch(JSON.stringify(data),/PRIVATE|random-token|fake-secret|test-token/);
+ });
+});
+
+test('cTrader account-list invalid request without ID exposes missing field label safely',async()=>{
+ const scenario={omitErrorMsgId:true,
+  errors:{demo:{2149:'INVALID_REQUEST'},live:{2149:'INVALID_REQUEST'}},
+  descriptions:{
+   demo:{2149:'Message missing required fields: accessToken SECRET_VALUE_NOT_PUBLIC'},
+   live:{2149:'Message missing required fields: accessToken SECRET_VALUE_NOT_PUBLIC'}
+  }};
+ await runWithBroker(scenario,async({env,cookie})=>{
+  const r=await worker.fetch(new Request(origin+'/api/ctrader/accounts',{headers:{cookie}}),env);
+  assert.equal(r.status,502);
+  const body=await r.json();
+  assert.match(body.error,/ACCOUNT_LIST: INVALID_REQUEST \(MISSING_ACCESSTOKEN\)/);
+  assert.doesNotMatch(JSON.stringify(body),/SECRET_VALUE_NOT_PUBLIC|test-token/);
+ });
+});
+
+test('generic protocol errors payload type 50 are handled without timing out',async()=>{
+ const scenario={genericError:true,omitErrorMsgId:true,
+  errors:{demo:{2100:'INVALID_REQUEST'},live:{2100:'INVALID_REQUEST'}}};
+ await runWithBroker(scenario,async({env,cookie})=>{
+  const r=await worker.fetch(new Request(origin+'/api/ctrader/accounts',{headers:{cookie}}),env);
+  assert.equal(r.status,502);
+  assert.match((await r.json()).error,/APP_AUTH: INVALID_REQUEST/);
  });
 });
