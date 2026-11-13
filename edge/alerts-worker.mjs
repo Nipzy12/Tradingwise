@@ -137,13 +137,18 @@ export async function runCron(env,{now=Date.now(),fetchFn=fetch}={}){
 }
 async function adminApi(request,env,path){
  if(!await authorized(request,env))return json({error:'Unauthorized or administration not configured'},401);
+ if(request.method==='GET'&&path==='/api/alerts/status'){
+  const rules=await env.DB.prepare('SELECT COUNT(*) AS n FROM alert_rules').first();
+  const pending=await env.DB.prepare("SELECT COUNT(*) AS n FROM alert_events WHERE status='pending'").first();
+  return json({enabled:true,scheduled:true,cron:'*/5 * * * *',engine:'smc-js-adaptation',rules:rules.n,subscriptions:0,pending:pending.n,webhookConfigured:Boolean(env.WEBHOOK_URL),signed:Boolean(env.WEBHOOK_SECRET)});
+ }
  if(request.method==='GET'&&path==='/api/alerts/rules'){
   const {results=[]}=await env.DB.prepare('SELECT * FROM alert_rules ORDER BY created_at DESC').all();
   return json({items:results.map(x=>({...x,types:JSON.parse(x.types),settings:JSON.parse(x.settings),active:!!x.active}))});
  }
  if(request.method==='GET'&&path==='/api/alerts/events'){
   const {results=[]}=await env.DB.prepare('SELECT id,payload,status,attempts,last_error,created_at FROM alert_events ORDER BY created_at DESC LIMIT 100').all();
-  return json({items:results.map(x=>({...x,payload:JSON.parse(x.payload)}))});
+  return json({items:results.map(x=>({...JSON.parse(x.payload),status:x.status,attempts:x.attempts,lastError:x.last_error,createdAt:x.created_at}))});
  }
  if(request.method==='POST'&&path==='/api/alerts/rules'){
   const contentType=request.headers.get('content-type')||'';if(!contentType.includes('application/json'))return json({error:'Expected JSON'},415);
@@ -166,10 +171,19 @@ async function adminApi(request,env,path){
 export default {
  async fetch(request,env){
   const path=new URL(request.url).pathname;
-  if(path==='/api/alerts/health'&&request.method==='GET')return json({ok:true,mode:'cloudflare-free-d1-cron',engine:'SMC JS adapter',provider:'BIQUOTE',timeframes:Object.keys(PERIODS),schedule:'*/5 * * * *',limits:{maxRules:MAX_RULES,exactPine:false},adminConfigured:!!env.ADMIN_TOKEN,webhookConfigured:!!env.WEBHOOK_URL,storageConfigured:!!env.DB});
-  if(!env.DB)return json({error:'Database not configured'},503);
-  if(!path.startsWith('/api/alerts/'))return json({error:'Not Found'},404);
-  try{return await adminApi(request,env,path)}catch(e){return json({error:String(e.message||e)},e.status>=400&&e.status<500?e.status:500)}
+  const origin=request.headers.get('Origin');
+  const trusted=origin==='https://tradingwise.vercel.app';
+  if(request.method==='OPTIONS'){
+   if(!trusted)return json({error:'Forbidden'},403);
+   return new Response(null,{status:204,headers:{'access-control-allow-origin':origin,'access-control-allow-methods':'GET,POST,DELETE,OPTIONS','access-control-allow-headers':'Authorization,Content-Type','vary':'Origin'}});
+  }
+  let response;
+  if(path==='/api/alerts/health'&&request.method==='GET')response=json({ok:true,mode:'cloudflare-free-d1-cron',engine:'SMC JS adapter',provider:'BIQUOTE',timeframes:Object.keys(PERIODS),schedule:'*/5 * * * *',limits:{maxRules:MAX_RULES,exactPine:false},adminConfigured:!!env.ADMIN_TOKEN,webhookConfigured:!!env.WEBHOOK_URL,storageConfigured:!!env.DB});
+  else if(!env.DB)response=json({error:'Database not configured'},503);
+  else if(!path.startsWith('/api/alerts/'))response=json({error:'Not Found'},404);
+  else{try{response=await adminApi(request,env,path)}catch(e){response=json({error:String(e.message||e)},e.status>=400&&e.status<500?e.status:500)}}
+  if(trusted){response.headers.set('access-control-allow-origin',origin);response.headers.set('vary','Origin')}
+  return response;
  },
  async scheduled(_controller,env,ctx){ctx.waitUntil(runCron(env));}
 };
