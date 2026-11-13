@@ -82,15 +82,19 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
    ['tools','Drawing tools',prefs.favorites.tools,id=>TOOLS[id]?.[0]||id],
    ['indicators','Indikator',prefs.favorites.indicators,id=>CATALOG.find(c=>c.id===id)?.name||id]
   ];
-  const html='<p class="settings-note">Favorit disimpan otomatis di perangkat ini. Klik item untuk menghapusnya dari toolbar. Gunakan Search, Timeframe, Indicators, atau klik kanan drawing tool untuk menambahkan.</p>'+
+  const html='<p class="settings-note">Favorit disimpan otomatis di perangkat ini. Klik item untuk menghapusnya dari toolbar. Untuk menambahkan, gunakan Search, Timeframe, Indicators, atau tombol pin tool di bawah.</p>'+
    sections.map(([kind,name,items,label])=>'<div class="favorite-manage-section"><strong>'+name+' ('+items.length+')</strong><div class="favorite-manage-items">'+
     (items.map(id=>'<button data-remove-fav-kind="'+kind+'" data-remove-fav-id="'+esc(id)+'" title="Hapus favorit">★ '+esc(label(id))+' ×</button>').join('')||'<span class="settings-note">Belum ada favorit.</span>')+
     '</div></div>').join('')+
+   '<div class="favorite-manage-section"><strong>Pin / lepas tool gambar</strong><div class="favorite-manage-items">'+
+    Object.entries(TOOLS).map(([id,info])=>'<button data-pin-tool="'+esc(id)+'" title="Pin drawing tool">'+(current('tools',id)?'★ ':'☆ ')+esc(info[0])+'</button>').join('')+
+   '</div></div>'+
    '<div class="modal-actions"><button class="mini-btn" id="favOpenSymbols">Cari simbol</button><button class="mini-btn" id="favOpenTimeframes">Timeframes</button><button class="primary-tiny" id="favDone">Selesai</button></div>';
   openModal('Kelola Favorit',html,root=>{
    root.onclick=e=>{
     const remove=e.target.closest('[data-remove-fav-kind]');
     if(remove){favorite(remove.dataset.removeFavKind,remove.dataset.removeFavId);favoritesModal();return}
+    const tool=e.target.closest('[data-pin-tool]');if(tool){favorite('tools',tool.dataset.pinTool);favoritesModal();return}
     if(e.target.closest('#favOpenTimeframes'))timeframesModal();
     if(e.target.closest('#favDone'))closeModal();
     if(e.target.closest('#favOpenSymbols')){closeModal();el('symbolBtn')?.click()}
