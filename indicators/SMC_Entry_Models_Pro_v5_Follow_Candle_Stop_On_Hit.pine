@@ -1,0 +1,862 @@
+//@version=6
+indicator("SMC Entry Models PRO v5 | Follow Candle", shorttitle="SMC Zones v5", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500, max_bars_back=500)
+
+// ============================================================================
+//  Trading Strategy Guides (20 Mar 2026) — 3 models translated to OHLC rules:
+//  M1: Liquidity sweep -> opposing structural break -> OB/FVG retracement
+//  M2: Trend BOS -> opposite-candle Order Block -> retracement
+//  M3: Displacement / 3-candle FVG -> midpoint/proximal retracement
+//  This is an independent rules-based implementation, not institutional data.
+//  Confirmed pivots and previously CLOSED HTF bars; no plot() used.
+//  Quality score is HEURISTIC, not proof of future price behavior.
+// ============================================================================
+
+// ── INPUTS ───────────────────────────────────────────────────────────────────
+g1 = "01 • Entry Models"
+useM1          = input.bool(true,  "M1 • Sweep → CHoCH/MSS", group=g1)
+useM2          = input.bool(true,  "M2 • OB continuation", group=g1)
+useM3          = input.bool(true,  "M3 • FVG sniper", group=g1)
+entryChoice    = input.string("Midpoint 50%", "Zona entry", options=["Midpoint 50%", "Proximal"], group=g1)
+requireFvgOB   = input.bool(true, "M2: wajib ada FVG dekat BOS", group=g1)
+
+
+g2 = "02 • Structure / Liquidity"
+swingLen       = input.int(3, "Pivot LTF (kiri & kanan)", minval=1, maxval=20, group=g2)
+obLookback     = input.int(12, "Cari candle OB (bar)", minval=2, maxval=40, group=g2)
+sweepWindow    = input.int(14, "Maks. jeda sweep → shift (bar)", minval=2, maxval=100, group=g2)
+sweepMinAtr    = input.float(0.04, "Penetrasi sweep minimum (ATR)", minval=0.0, maxval=2.0, step=0.01, group=g2)
+shiftBodyAtr   = input.float(0.55, "Body shift setelah sweep (ATR)", minval=0.0, maxval=3.0, step=0.05, group=g2)
+nearFvgBars    = input.int(6, "Maks. jarak FVG ↔ BOS (bar)", minval=1, maxval=30, group=g2)
+minFvgAtr      = input.float(0.12, "Lebar FVG minimum (ATR)", minval=0.0, step=0.02, group=g2)
+displaceAtr    = input.float(1.0, "Body candle displacement / ATR", minval=0.1, step=0.05, group=g2)
+
+
+g3 = "03 • Higher Time Frame"
+htfMode        = input.string("Bias", "Konfirmasi HTF", options=["Off", "Bias", "POI + Sweep"], group=g3)
+htfTF          = input.timeframe("240", "Timeframe HTF", group=g3)
+htfPoiType     = input.string("OB or FVG", "Sumber HTF POI", options=["OB only", "FVG only", "OB or FVG"], group=g3)
+htfSwing       = input.int(3, "Pivot HTF", minval=1, maxval=12, group=g3)
+poiMemory      = input.int(12, "Maks. jarak sentuhan POI (bar LTF)", minval=1, maxval=100, group=g3)
+
+
+gQuality = "04 • Validasi Zona (anti-noise)"
+qualityMode      = input.string("Ketat", "Standar kualitas", options=["Ketat", "Normal", "Longgar"], group=gQuality)
+minBodyRatio     = input.float(0.60, "Body / range impuls minimum", minval=0.30, maxval=0.95, step=0.05, group=gQuality)
+minBreakBodyAtr  = input.float(0.70, "Body BOS minimum (ATR)", minval=0.2, maxval=3.0, step=0.05, group=gQuality)
+minBreakCloseAtr = input.float(0.06, "Jarak close melewati struktur (ATR)", minval=0.0, maxval=1.0, step=0.02, group=gQuality)
+minDepartureAtr  = input.float(0.08, "Jarak close dari OB (ATR)", minval=0.0, maxval=2.0, step=0.02, group=gQuality)
+maxObOriginAge   = input.int(8, "Maksimum umur candle OB ketika BOS (bar)", minval=1, maxval=40, group=gQuality)
+minZoneWidthAtr  = input.float(0.04, "Lebar zona minimum (ATR)", minval=0.0, maxval=1.0, step=0.01, group=gQuality)
+maxZoneWidthAtr  = input.float(2.2, "Lebar zona maksimum (ATR)", minval=0.2, maxval=10.0, step=0.1, group=gQuality)
+useVolumeFilter  = input.bool(false, "Wajib volume impuls di atas rata-rata", group=gQuality, tooltip="Opsional. Feed volume yang kosong akan membuat zona ditolak ketika diaktifkan.")
+volumeMultiplier = input.float(1.2, "Volume minimum / SMA20", minval=1.0, maxval=5.0, step=0.1, group=gQuality)
+invalidBy        = input.string("Close", "Broken jika candle menembus: ", options=["Close", "Wick"], group=gQuality)
+invalidBufferAtr = input.float(0.03, "Toleransi break (ATR)", minval=0.0, maxval=1.0, step=0.01, group=gQuality)
+consumeDepth     = input.float(0.95, "Hapus jika mitigasi mencapai proporsi zona", minval=0.5, maxval=1.0, step=0.05, group=gQuality)
+maxRetests       = input.int(0, "Retest sebelum zona dihapus (0 = hanya fresh)", minval=0, maxval=5, group=gQuality)
+maxZoneAge       = input.int(250, "Hapus zona lebih tua dari (bar)", minval=10, maxval=3000, group=gQuality)
+maxZoneDistance  = input.float(12.0, "Hapus zona terlalu jauh dari harga (ATR)", minval=2.0, maxval=100.0, step=1.0, group=gQuality)
+deduplicateZone  = input.bool(true, "Gabungkan zona searah yang overlap", group=gQuality)
+
+g4 = "05 • Risk Management"
+rrTarget       = input.float(2.0, "Take Profit (Risk:Reward)", minval=0.5, maxval=20.0, step=0.25, group=g4)
+slAtrBuffer    = input.float(0.12, "Buffer SL (ATR)", minval=0.0, maxval=3.0, step=0.02, group=g4)
+maxStopAtr     = input.float(10.0, "Maksimum jarak SL (ATR)", minval=0.25, maxval=50.0, step=0.25, group=g4)
+pendingLife    = input.int(40, "Kedaluwarsa pending (bar)", minval=2, maxval=300, group=g4)
+
+
+g5 = "06 • Drawing & History"
+showStructure  = input.bool(true, "Gambar BOS / CHoCH / sweep", group=g5)
+showBaseZones  = input.bool(true, "Gambar zona OB / FVG", group=g5)
+showPending    = input.bool(true, "Gambar zona pending + harga", group=g5)
+showHtfPoi     = input.bool(true, "Gambar HTF POI", group=g5)
+zoneForward    = input.int(18, "Proyeksi box (bar)", minval=2, maxval=150, group=g5)
+zoneHistory   = input.int(25, "Maksimum zona aktif (bukan yang broken)", minval=1, maxval=80, group=g5)
+setupHistory   = input.int(12, "Jumlah riwayat setup entry", minval=1, maxval=35, group=g5)
+structureHist  = input.int(45, "Jumlah riwayat struktur", minval=5, maxval=100, group=g5)
+structureTextPos = input.string("Tengah", "Letak teks BOS / CHoCH / sweep", options=["Tengah", "Ujung kanan"], group=g5)
+structureTextGap = input.float(0.10, "Jarak teks dari garis (ATR)", minval=0.01, maxval=0.8, step=0.01, group=g5)
+textSizeOpt    = input.string("Small", "Ukuran teks struktur / zona", options=["Tiny", "Small", "Normal"], group=g5)
+
+// Tampilan setup bersifat independen dari tampilan BOS/CHoCH dan zona.
+gSetup = "07 • Tampilan Setup Entry / SL / TP"
+setupTextAlign   = input.string("Tengah", "Perataan teks di sepanjang garis", options=["Kiri", "Tengah", "Kanan"], group=gSetup)
+setupTextSizeOpt = input.string("Tiny", "Ukuran teks setup", options=["Tiny", "Small", "Normal", "Large"], group=gSetup)
+setupLineWidth   = input.int(1, "Ketebalan garis setup", minval=1, maxval=5, group=gSetup)
+setupLineStyleOp = input.string("Solid", "Bentuk garis setup", options=["Solid", "Dashed", "Dotted"], group=gSetup)
+setupTextGapBars = input.int(4, "Jarak antargaris di sekitar teks (bar)", minval=1, maxval=20, group=gSetup, tooltip="Default 4 bar: jarak lebih rapat daripada v4. Ukuran visual bergantung pada zoom chart; sesuaikan bila teks menimpa garis.")
+setupStartBars   = input.int(6, "Panjang awal garis ke kiri (bar)", minval=0, maxval=20, group=gSetup, tooltip="Hanya tampilan. Memberi garis pendek saat entry baru tercipta, tanpa memproyeksikannya jauh ke depan.")
+setupLeadBars    = input.int(0, "Ujung kanan melewati candle aktif (bar)", minval=0, maxval=3, group=gSetup, tooltip="0 = garis berakhir tepat di candle aktif. Ketika TP/SL terkena, ujungnya selalu berhenti di candle hit (tanpa offset).")
+setupShowModel   = input.bool(false, "Tampilkan model M1/M2/M3 pada Entry", group=gSetup)
+
+// ── COLORS / UTILS ────────────────────────────────────────────────────────────
+cBuy   = color.rgb(16, 185, 129)
+cSell  = color.rgb(244, 63, 94)
+cTP    = color.rgb(34, 197, 94)
+cSL    = color.rgb(239, 68, 68)
+cMute  = color.rgb(130, 138, 150)
+cHTF   = color.rgb(168, 85, 247)
+atr    = ta.atr(14)
+txtSz  = textSizeOpt == "Tiny" ? size.tiny : textSizeOpt == "Normal" ? size.normal : size.small
+setupTxtSz = setupTextSizeOpt == "Tiny" ? size.tiny : setupTextSizeOpt == "Small" ? size.small : setupTextSizeOpt == "Large" ? size.large : size.normal
+setupLnStyle = setupLineStyleOp == "Dashed" ? line.style_dashed : setupLineStyleOp == "Dotted" ? line.style_dotted : line.style_solid
+
+f_price(float n) =>
+    str.tostring(n, format.mintick)
+
+// This score is a filter for candidate quality, NOT a probability of winning.
+// Weights: 25 impulse, 15 body efficiency, 20 structural context,
+// 15 HTF alignment, 15 confluence, 10 clean departure.
+f_qualityScore(float impulseAtr, float bodyEfficiency, bool structureOK, bool htfOK, bool confluenceOK, bool cleanDeparture) =>
+    int score = 0
+    score += impulseAtr >= displaceAtr * 1.25 ? 25 : impulseAtr >= displaceAtr ? 20 : impulseAtr >= displaceAtr * 0.65 ? 10 : 0
+    score += bodyEfficiency >= minBodyRatio + 0.10 ? 15 : bodyEfficiency >= minBodyRatio ? 10 : 0
+    score += structureOK ? 20 : 0
+    score += htfOK ? 15 : 0
+    score += confluenceOK ? 15 : 0
+    score += cleanDeparture ? 10 : 0
+    score
+
+f_scorePass(int score) =>
+    score >= (qualityMode == "Ketat" ? 85 : qualityMode == "Normal" ? 75 : 65)
+
+f_widthPass(float top, float bottom) =>
+    not na(top) and not na(bottom) and not na(atr) and atr > 0 and top > bottom and (top - bottom) / atr >= minZoneWidthAtr and (top - bottom) / atr <= maxZoneWidthAtr
+
+f_overlapRatio(float t1, float b1, float t2, float b2) =>
+    float overlap = math.max(0.0, math.min(t1, t2) - math.max(b1, b2))
+    float smaller = math.min(t1 - b1, t2 - b2)
+    smaller > 0 ? overlap / smaller : 0.0
+
+// Return the last opposing candle; wicks define an OB's full price range.
+f_findOb(int side, int lookback) =>
+    float t = na
+    float b = na
+    int left = na
+    for k = 1 to lookback
+        bool opposite = side == 1 ? close[k] < open[k] : close[k] > open[k]
+        if na(t) and not na(close[k]) and opposite
+            t := high[k]
+            b := low[k]
+            left := bar_index - k
+    [t, b, left]
+
+// This function executes inside the requested HTF. Every returned field is
+// offset by [1] so request.security(..., lookahead_on) uses CLOSED HTF candles.
+f_htfContext() =>
+    var float h = na
+    var float l = na
+    var bool hBroken = false
+    var bool lBroken = false
+    var int trend = 0
+    var int poiSide = 0
+    var float poiTop = na
+    var float poiBot = na
+    var int gapSide = 0
+    var float gapTop = na
+    var float gapBot = na
+    float htfAtr = ta.atr(14)
+    float ph = ta.pivothigh(high, htfSwing, htfSwing)
+    float pl = ta.pivotlow(low, htfSwing, htfSwing)
+    if not na(ph)
+        h := ph
+        hBroken := false
+    if not na(pl)
+        l := pl
+        lBroken := false
+    bool upBreak = not na(h) and not hBroken and close > h and close[1] <= h
+    bool dnBreak = not na(l) and not lBroken and close < l and close[1] >= l
+    if upBreak
+        hBroken := true
+        trend := 1
+        poiSide := 0
+        poiTop := na
+        poiBot := na
+        bool found = false
+        for i = 1 to obLookback
+            if not found and not na(close[i]) and close[i] < open[i]
+                poiTop := high[i]
+                poiBot := low[i]
+                poiSide := 1
+                found := true
+    if dnBreak
+        lBroken := true
+        trend := -1
+        poiSide := 0
+        poiTop := na
+        poiBot := na
+        bool found = false
+        for i = 1 to obLookback
+            if not found and not na(close[i]) and close[i] > open[i]
+                poiTop := high[i]
+                poiBot := low[i]
+                poiSide := -1
+                found := true
+    if poiSide == 1 and not na(poiBot) and close < poiBot
+        poiSide := 0
+    if poiSide == -1 and not na(poiTop) and close > poiTop
+        poiSide := 0
+    bool upGap = not na(high[2]) and low > high[2] and (low - high[2]) >= minFvgAtr * htfAtr and close[1] > open[1] and math.abs(close[1] - open[1]) >= displaceAtr * htfAtr[1]
+    bool dnGap = not na(low[2]) and high < low[2] and (low[2] - high) >= minFvgAtr * htfAtr and close[1] < open[1] and math.abs(close[1] - open[1]) >= displaceAtr * htfAtr[1]
+    if upGap and trend == 1
+        gapTop := low
+        gapBot := high[2]
+        gapSide := 1
+    if dnGap and trend == -1
+        gapTop := low[2]
+        gapBot := high
+        gapSide := -1
+    if gapSide == 1 and not na(gapBot) and close < gapBot
+        gapSide := 0
+    if gapSide == -1 and not na(gapTop) and close > gapTop
+        gapSide := 0
+    bool useOB = htfPoiType == "OB only" or (htfPoiType == "OB or FVG" and poiSide == trend and poiSide != 0)
+    int chosenSide = useOB ? poiSide : gapSide
+    float chosenTop = useOB ? poiTop : gapTop
+    float chosenBot = useOB ? poiBot : gapBot
+    // If "FVG only" is chosen, ignore the OB completely.
+    if htfPoiType == "FVG only"
+        chosenSide := gapSide
+        chosenTop := gapTop
+        chosenBot := gapBot
+    [trend[1], chosenSide[1], chosenTop[1], chosenBot[1]]
+
+if htfMode != "Off" and timeframe.in_seconds() >= timeframe.in_seconds(htfTF)
+    runtime.error("HTF harus lebih besar dari timeframe chart. Contoh: chart 5m / HTF 4H.")
+
+[htfBias, htfPoiSide, htfPoiTop, htfPoiBot] = request.security(syminfo.tickerid, htfTF, f_htfContext(), lookahead=barmerge.lookahead_on)
+
+// Avoid displaying an HTF POI already invalidated by CLOSED lower-TF candles.
+// Keep its local invalid status until a genuinely different HTF POI arrives.
+var int seenHtfPoiSide = 0
+var float seenHtfPoiTop = na
+var float seenHtfPoiBot = na
+var bool localHtfInvalid = false
+bool freshHtfPoi = htfPoiSide != seenHtfPoiSide or (not na(htfPoiTop) and (na(seenHtfPoiTop) or htfPoiTop != seenHtfPoiTop)) or (not na(htfPoiBot) and (na(seenHtfPoiBot) or htfPoiBot != seenHtfPoiBot))
+if freshHtfPoi
+    seenHtfPoiSide := htfPoiSide
+    seenHtfPoiTop := htfPoiTop
+    seenHtfPoiBot := htfPoiBot
+    localHtfInvalid := false
+if barstate.isconfirmed and htfPoiSide != 0 and not na(htfPoiTop) and not na(htfPoiBot) and htfPoiTop > htfPoiBot
+    bool htfWickBroken = htfPoiSide == 1 ? low < htfPoiBot - invalidBufferAtr * atr : high > htfPoiTop + invalidBufferAtr * atr
+    bool htfCloseBroken = htfPoiSide == 1 ? close < htfPoiBot - invalidBufferAtr * atr : close > htfPoiTop + invalidBufferAtr * atr
+    bool htfTouchedLocal = low <= htfPoiTop and high >= htfPoiBot
+    float htfDepth = htfTouchedLocal ? (htfPoiSide == 1 ? (htfPoiTop - low) / (htfPoiTop - htfPoiBot) : (high - htfPoiBot) / (htfPoiTop - htfPoiBot)) : 0.0
+    if (invalidBy == "Wick" ? htfWickBroken : htfCloseBroken) or htfDepth >= consumeDepth
+        localHtfInvalid := true
+
+// ── OBJECT ARRAYS ─────────────────────────────────────────────────────────────
+var line[] structureLines = array.new_line()
+var label[] structureTexts = array.new_label()
+var box[]  baseBoxes = array.new_box()
+var int[]  baseSide = array.new_int()
+var float[] baseTop = array.new_float()
+var float[] baseBot = array.new_float()
+var int[]  baseBorn = array.new_int()
+var int[]  baseTouches = array.new_int()
+var bool[] baseWasTouch = array.new_bool()
+var int[]  baseQuality = array.new_int()
+
+// Pending orders. A candidate is only executable from the NEXT candle onward.
+var int[]    pSide = array.new_int()
+var string[] pModel = array.new_string()
+var float[]  pEntry = array.new_float()
+var float[]  pZoneTop = array.new_float()
+var float[]  pZoneBot = array.new_float()
+var float[]  pSL = array.new_float()
+var float[]  pTP = array.new_float()
+var int[]    pBorn = array.new_int()
+var box[]    pBox = array.new_box()
+var int[]    pTouches = array.new_int()
+var bool[]   pWasTouch = array.new_bool()
+
+// Filled trade history, oldest drawings deleted when max history is reached.
+var int[]    trSide = array.new_int()
+var int[]    trBorn = array.new_int()
+var int[]    trStatus = array.new_int()   // 0 live, +1 TP, -1 SL
+var float[]  trEntry = array.new_float()
+var float[]  trSL = array.new_float()
+var float[]  trTP = array.new_float()
+// Each price level uses two line segments around a background-free label.
+var line[]   trLineE = array.new_line()
+var line[]   trLineS = array.new_line()
+var line[]   trLineT = array.new_line()
+var line[]   trRightE = array.new_line()
+var line[]   trRightS = array.new_line()
+var line[]   trRightT = array.new_line()
+var label[]  trTextE = array.new_label()
+var label[]  trTextS = array.new_label()
+var label[]  trTextT = array.new_label()
+var box[]    trOrigin = array.new_box()
+
+// ── DRAWING FUNCTIONS ─────────────────────────────────────────────────────────
+// Screenshot style: one dashed price-level line (pivot -> event candle),
+// with small floating text near the middle, WITHOUT a colored box.
+// direction = +1 puts text above green levels; -1 puts it below red levels.
+f_structure(string title, float y, int origin, color col, int direction) =>
+    if showStructure and not na(y)
+        int firstBar = math.min(nz(origin, bar_index - 1), bar_index - 1)
+        int x1 = math.max(bar_index - 9900, firstBar)
+        int x2 = bar_index
+        line ln = line.new(x1=x1, y1=y, x2=x2, y2=y, xloc=xloc.bar_index, extend=extend.none, color=col, width=1, style=line.style_dashed)
+        int centerX = x1 + int(math.floor((x2 - x1) * 0.5))
+        int textX = structureTextPos == "Ujung kanan" ? x2 : centerX
+        float gap = math.max(nz(atr, high - low) * structureTextGap, syminfo.mintick * 4)
+        float textY = y + direction * gap
+        label tx = label.new(x=textX, y=textY, text=title, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_none, textcolor=col, size=txtSz, textalign=text.align_center)
+        array.push(structureLines, ln)
+        array.push(structureTexts, tx)
+        if array.size(structureLines) > structureHist
+            line.delete(array.shift(structureLines))
+            label.delete(array.shift(structureTexts))
+
+// Delete BOTH the drawing and the corresponding parallel-array metadata.
+// This keeps active-zone arrays synchronized when a zone is invalidated.
+f_removeBase(int i) =>
+    box.delete(array.remove(baseBoxes, i))
+    array.remove(baseSide, i)
+    array.remove(baseTop, i)
+    array.remove(baseBot, i)
+    array.remove(baseBorn, i)
+    array.remove(baseTouches, i)
+    array.remove(baseWasTouch, i)
+    array.remove(baseQuality, i)
+
+f_baseZone(string title, int side, float top, float bottom, int x, int score) =>
+    if showBaseZones and f_widthPass(top, bottom) and f_scorePass(score)
+        bool strongerExists = false
+        if deduplicateZone and array.size(baseBoxes) > 0
+            for i = 0 to array.size(baseBoxes) - 1
+                bool related = array.get(baseSide, i) == side and bar_index - array.get(baseBorn, i) <= nearFvgBars * 2 and f_overlapRatio(top, bottom, array.get(baseTop, i), array.get(baseBot, i)) >= 0.65
+                if related and array.get(baseQuality, i) >= score
+                    strongerExists := true
+        if not strongerExists
+            if deduplicateZone and array.size(baseBoxes) > 0
+                int n = array.size(baseBoxes)
+                for off = 0 to n - 1
+                    int i = n - 1 - off
+                    bool related = array.get(baseSide, i) == side and bar_index - array.get(baseBorn, i) <= nearFvgBars * 2 and f_overlapRatio(top, bottom, array.get(baseTop, i), array.get(baseBot, i)) >= 0.65
+                    if related and array.get(baseQuality, i) < score
+                        f_removeBase(i)
+            color col = side == 1 ? cBuy : cSell
+            box b = box.new(left=math.max(bar_index - 9900, x), top=top, right=bar_index + zoneForward, bottom=bottom, bgcolor=color.new(col, 89), border_color=color.new(col, 40), text=title + "  Q" + str.tostring(score), text_color=col, text_size=txtSz)
+            array.push(baseBoxes, b)
+            array.push(baseSide, side)
+            array.push(baseTop, top)
+            array.push(baseBot, bottom)
+            array.push(baseBorn, bar_index)
+            array.push(baseTouches, 0)
+            array.push(baseWasTouch, false)
+            array.push(baseQuality, score)
+            if array.size(baseBoxes) > zoneHistory
+                f_removeBase(0)
+
+// Enqueue an OB/FVG limit; stop uses the model's reference extreme.
+f_pending(string model, int side, float top, float bottom, float stopRef) =>
+    bool added = false
+    if not na(top) and not na(bottom) and top > bottom and not na(stopRef) and not na(atr)
+        float entry = entryChoice == "Midpoint 50%" ? (top + bottom) * 0.5 : side == 1 ? top : bottom
+        float sl = side == 1 ? math.min(stopRef, bottom) - slAtrBuffer * atr : math.max(stopRef, top) + slAtrBuffer * atr
+        float risk = math.abs(entry - sl)
+        bool rightSide = side == 1 ? (sl < entry and entry < close) : (sl > entry and entry > close)
+        bool duplicatePending = false
+        if array.size(pSide) > 0
+            for i = 0 to array.size(pSide) - 1
+                if array.get(pSide, i) == side and array.get(pModel, i) == model and f_overlapRatio(top, bottom, array.get(pZoneTop, i), array.get(pZoneBot, i)) >= 0.80
+                    duplicatePending := true
+        if rightSide and not duplicatePending and risk >= syminfo.mintick * 2 and risk <= maxStopAtr * atr
+            float tp = entry + side * risk * rrTarget
+            color col = side == 1 ? cBuy : cSell
+            box pb = na
+            if showPending
+                string title = model + (side == 1 ? "  BUY @ " : "  SELL @ ") + f_price(entry)
+                pb := box.new(left=bar_index, top=top, right=bar_index + zoneForward, bottom=bottom, bgcolor=color.new(col, 82), border_color=col, text=title, text_color=col, text_size=txtSz)
+            array.push(pSide, side)
+            array.push(pModel, model)
+            array.push(pEntry, entry)
+            array.push(pZoneTop, top)
+            array.push(pZoneBot, bottom)
+            array.push(pSL, sl)
+            array.push(pTP, tp)
+            array.push(pBorn, bar_index)
+            array.push(pBox, pb)
+            array.push(pTouches, 0)
+            array.push(pWasTouch, false)
+            if array.size(pSide) > 14
+                box old = array.shift(pBox)
+                if not na(old)
+                    box.delete(old)
+                array.shift(pSide)
+                array.shift(pModel)
+                array.shift(pEntry)
+                array.shift(pZoneTop)
+                array.shift(pZoneBot)
+                array.shift(pSL)
+                array.shift(pTP)
+                array.shift(pBorn)
+                array.shift(pTouches)
+                array.shift(pWasTouch)
+            added := true
+    added
+
+f_removePending(int i, bool keepBox) =>
+    box pb = array.remove(pBox, i)
+    if not keepBox and not na(pb)
+        box.delete(pb)
+    array.remove(pSide, i)
+    array.remove(pModel, i)
+    array.remove(pEntry, i)
+    array.remove(pZoneTop, i)
+    array.remove(pZoneBot, i)
+    array.remove(pSL, i)
+    array.remove(pTP, i)
+    array.remove(pBorn, i)
+    array.remove(pTouches, i)
+    array.remove(pWasTouch, i)
+
+// Compact inline setup: kiri ─ teks ─ kanan. Posisi x2 tidak pernah dipaksa
+// ke masa depan, sehingga panjang mengikuti candle dan bukan proyeksi 36 bar.
+// Pada rentang sangat pendek kedua segmen bisa belum terlihat penuh;
+// teks tetap tampil dan semua objek berhenti di candle hit.
+f_setupPlacement(int startX, int desiredEnd) =>
+    int endX = math.max(startX, desiredEnd)
+    int span = endX - startX
+    // Jangan memaksa endX melampaui candle hanya untuk mengakomodasi teks.
+    // Sisakan setidaknya satu bar pada setiap sisi setelah ada ruang.
+    int gapBars = math.min(setupTextGapBars, math.max(0, span - 2))
+    float factor = setupTextAlign == "Kiri" ? 0.25 : setupTextAlign == "Kanan" ? 0.75 : 0.50
+    int centerX = startX + int(math.round(span * factor))
+    int halfLeft = int(math.floor(gapBars * 0.5))
+    int halfRight = gapBars - halfLeft
+    centerX := math.max(startX + halfLeft, math.min(endX - halfRight, centerX))
+    int segLeftEnd = centerX - halfLeft
+    int segRightStart = centerX + halfRight
+    [segLeftEnd, segRightStart, centerX, endX]
+
+f_drawSetupLevel(float price, string title, color col) =>
+    // Sedikit pangkal ke kiri memastikan garis masih terlihat pada candle entry,
+    // termasuk bila entry dan SL tersentuh pada candle yang sama.
+    int startX = math.max(0, bar_index - setupStartBars)
+    int activeEnd = bar_index + setupLeadBars
+    [segLeftEnd, segRightStart, centerX, endX] = f_setupPlacement(startX, activeEnd)
+    line lLeft = line.new(x1=startX, y1=price, x2=segLeftEnd, y2=price, xloc=xloc.bar_index, extend=extend.none, color=col, style=setupLnStyle, width=setupLineWidth)
+    line lRight = line.new(x1=segRightStart, y1=price, x2=endX, y2=price, xloc=xloc.bar_index, extend=extend.none, color=col, style=setupLnStyle, width=setupLineWidth)
+    label tx = label.new(x=centerX, y=price, text=title, xloc=xloc.bar_index, yloc=yloc.price, style=label.style_none, textcolor=col, size=setupTxtSz, textalign=text.align_center)
+    [lLeft, lRight, tx]
+
+// Bergerak hanya untuk trade berstatus aktif. Setelah TP/SL disentuh,
+// pemanggil mengunci posisi akhir tepat pada bar_index candle hit.
+f_updateSetupLevel(line lLeft, line lRight, label tx, int desiredEnd) =>
+    int startX = line.get_x1(lLeft)
+    [segLeftEnd, segRightStart, centerX, endX] = f_setupPlacement(startX, desiredEnd)
+    line.set_x2(lLeft, segLeftEnd)
+    line.set_x1(lRight, segRightStart)
+    line.set_x2(lRight, endX)
+    label.set_x(tx, centerX)
+
+f_fill(string model, int side, float entry, float sl, float tp, box origin) =>
+    color col = side == 1 ? cBuy : cSell
+    string enTitle = (side == 1 ? "Entry ↑ " : "Entry ↓ ") + (setupShowModel ? model + "  " : "") + f_price(entry)
+    string slTitle = "SL " + f_price(sl)
+    string tpTitle = "TP " + str.tostring(rrTarget) + "R  " + f_price(tp)
+    [le, re, te] = f_drawSetupLevel(entry, enTitle, col)
+    [ls, rs, ts] = f_drawSetupLevel(sl, slTitle, cSL)
+    [lt, rt, tt] = f_drawSetupLevel(tp, tpTitle, cTP)
+    // The filled pending zone is consumed, while Entry/SL/TP history is kept.
+    if not na(origin)
+        box.delete(origin)
+    array.push(trSide, side)
+    array.push(trBorn, bar_index)
+    array.push(trStatus, 0)
+    array.push(trEntry, entry)
+    array.push(trSL, sl)
+    array.push(trTP, tp)
+    array.push(trLineE, le)
+    array.push(trLineS, ls)
+    array.push(trLineT, lt)
+    array.push(trRightE, re)
+    array.push(trRightS, rs)
+    array.push(trRightT, rt)
+    array.push(trTextE, te)
+    array.push(trTextS, ts)
+    array.push(trTextT, tt)
+    array.push(trOrigin, na)
+    if array.size(trSide) > setupHistory
+        line.delete(array.shift(trLineE))
+        line.delete(array.shift(trLineS))
+        line.delete(array.shift(trLineT))
+        line.delete(array.shift(trRightE))
+        line.delete(array.shift(trRightS))
+        line.delete(array.shift(trRightT))
+        label.delete(array.shift(trTextE))
+        label.delete(array.shift(trTextS))
+        label.delete(array.shift(trTextT))
+        box old = array.shift(trOrigin)
+        if not na(old)
+            box.delete(old)
+        array.shift(trSide)
+        array.shift(trBorn)
+        array.shift(trStatus)
+        array.shift(trEntry)
+        array.shift(trSL)
+        array.shift(trTP)
+
+// ── MARKET STRUCTURE (CONFIRMED PIVOTS) ────────────────────────────────────────
+var float swingHigh = na
+var float swingLow = na
+var int swingHiAt = na
+var int swingLoAt = na
+var bool hiBroken = false
+var bool loBroken = false
+var bool hiSwept = false
+var bool loSwept = false
+var int structureDir = 0
+var int lastBullBreakAt = na
+var int lastBearBreakAt = na
+
+float pH = ta.pivothigh(high, swingLen, swingLen)
+float pL = ta.pivotlow(low, swingLen, swingLen)
+if not na(pH)
+    swingHigh := pH
+    swingHiAt := bar_index - swingLen
+    hiBroken := false
+    hiSwept := false
+if not na(pL)
+    swingLow := pL
+    swingLoAt := bar_index - swingLen
+    loBroken := false
+    loSwept := false
+
+bool sweepLow  = barstate.isconfirmed and not loSwept and not na(swingLow) and bar_index > swingLoAt and low < swingLow - math.max(syminfo.mintick, atr * sweepMinAtr) and close > swingLow
+bool sweepHigh = barstate.isconfirmed and not hiSwept and not na(swingHigh) and bar_index > swingHiAt and high > swingHigh + math.max(syminfo.mintick, atr * sweepMinAtr) and close < swingHigh
+
+var int lastBullSweepAt = na
+var float lastBullSweepLow = na
+var bool bullSweepAtPoi = false
+var int lastBearSweepAt = na
+var float lastBearSweepHigh = na
+var bool bearSweepAtPoi = false
+
+bool poiTouchBull = not localHtfInvalid and htfPoiSide == 1 and not na(htfPoiTop) and not na(htfPoiBot) and low <= htfPoiTop and high >= htfPoiBot
+bool poiTouchBear = not localHtfInvalid and htfPoiSide == -1 and not na(htfPoiTop) and not na(htfPoiBot) and low <= htfPoiTop and high >= htfPoiBot
+var int lastBullPoiAt = na
+var int lastBearPoiAt = na
+if barstate.isconfirmed and poiTouchBull
+    lastBullPoiAt := bar_index
+if barstate.isconfirmed and poiTouchBear
+    lastBearPoiAt := bar_index
+
+if sweepLow
+    loSwept := true
+    lastBullSweepAt := bar_index
+    lastBullSweepLow := low
+    bullSweepAtPoi := poiTouchBull
+    f_structure("SSL SWEEP", swingLow, swingLoAt, cBuy, 1)
+if sweepHigh
+    hiSwept := true
+    lastBearSweepAt := bar_index
+    lastBearSweepHigh := high
+    bearSweepAtPoi := poiTouchBear
+    f_structure("BSL SWEEP", swingHigh, swingHiAt, cSell, -1)
+
+bool bullBreak = barstate.isconfirmed and not hiBroken and not na(swingHigh) and close > swingHigh and close[1] <= swingHigh and bar_index > swingHiAt
+bool bearBreak = barstate.isconfirmed and not loBroken and not na(swingLow) and close < swingLow and close[1] >= swingLow and bar_index > swingLoAt
+int oldStructureDir = structureDir
+if bullBreak
+    hiBroken := true
+    structureDir := 1
+    lastBullBreakAt := bar_index
+    f_structure(oldStructureDir == -1 ? "CHoCH" : "BOS", swingHigh, swingHiAt, cBuy, 1)
+if bearBreak
+    loBroken := true
+    structureDir := -1
+    lastBearBreakAt := bar_index
+    f_structure(oldStructureDir == 1 ? "CHoCH" : "BOS", swingLow, swingLoAt, cSell, -1)
+
+// ── QUALIFIED FVG / ORDER BLOCK ────────────────────────────────────────────
+// Score only confirmed impulses; volume is an OPTIONAL extra gate.
+float volAvg = ta.sma(volume, 20)
+float candleRange1 = math.max(high[1] - low[1], syminfo.mintick)
+float candleRange0 = math.max(high - low, syminfo.mintick)
+float body1 = math.abs(close[1] - open[1])
+float body0 = math.abs(close - open)
+float efficiency1 = body1 / candleRange1
+float efficiency0 = body0 / candleRange0
+bool volumeOK1 = not useVolumeFilter or (not na(volume[1]) and not na(volAvg[1]) and volAvg[1] > 0 and volume[1] >= volAvg[1] * volumeMultiplier)
+bool volumeOK0 = not useVolumeFilter or (not na(volume) and not na(volAvg) and volAvg > 0 and volume >= volAvg * volumeMultiplier)
+bool htfAgreeBull = htfMode == "Off" or htfBias == 1
+bool htfAgreeBear = htfMode == "Off" or htfBias == -1
+bool recentBullBreak = not na(lastBullBreakAt) and bar_index - lastBullBreakAt <= nearFvgBars
+bool recentBearBreak = not na(lastBearBreakAt) and bar_index - lastBearBreakAt <= nearFvgBars
+bool recentBullSweep = not na(lastBullSweepAt) and bar_index - lastBullSweepAt <= sweepWindow
+bool recentBearSweep = not na(lastBearSweepAt) and bar_index - lastBearSweepAt <= sweepWindow
+bool bullConfluence = recentBullBreak or recentBullSweep
+bool bearConfluence = recentBearBreak or recentBearSweep
+
+bool displacement = not na(atr[1]) and body1 >= displaceAtr * atr[1]
+bool bullFvgRaw = barstate.isconfirmed and not na(high[2]) and low > high[2] and (low - high[2]) >= minFvgAtr * atr and close[1] > open[1] and displacement
+bool bearFvgRaw = barstate.isconfirmed and not na(low[2]) and high < low[2] and (low[2] - high) >= minFvgAtr * atr and close[1] < open[1] and displacement
+int bullFvgScore = f_qualityScore(not na(atr[1]) and atr[1] > 0 ? body1 / atr[1] : 0.0, efficiency1, structureDir == 1, htfAgreeBull, bullConfluence, close > (high + low) * 0.5)
+int bearFvgScore = f_qualityScore(not na(atr[1]) and atr[1] > 0 ? body1 / atr[1] : 0.0, efficiency1, structureDir == -1, htfAgreeBear, bearConfluence, close < (high + low) * 0.5)
+bool bullFVG = bullFvgRaw and efficiency1 >= minBodyRatio and htfAgreeBull and volumeOK1 and f_widthPass(low, high[2]) and f_scorePass(bullFvgScore)
+bool bearFVG = bearFvgRaw and efficiency1 >= minBodyRatio and htfAgreeBear and volumeOK1 and f_widthPass(low[2], high) and f_scorePass(bearFvgScore)
+
+var int lastBullFvgAt = na
+var float lastBullFvgTop = na
+var float lastBullFvgBot = na
+var bool lastBullFvgLive = false
+var int lastBullFvgTests = 0
+var bool lastBullFvgTouching = false
+var int lastBearFvgAt = na
+var float lastBearFvgTop = na
+var float lastBearFvgBot = na
+var bool lastBearFvgLive = false
+var int lastBearFvgTests = 0
+var bool lastBearFvgTouching = false
+// M1 fallback / M2 confluence MUST NOT use a fully mitigated or overtested FVG.
+if barstate.isconfirmed and lastBullFvgLive and bar_index > lastBullFvgAt
+    bool bullTouchNow = low <= lastBullFvgTop and high >= lastBullFvgBot
+    if bullTouchNow and not lastBullFvgTouching
+        lastBullFvgTests += 1
+    lastBullFvgTouching := bullTouchNow
+    float bullDepth = bullTouchNow ? (lastBullFvgTop - low) / (lastBullFvgTop - lastBullFvgBot) : 0.0
+    if bullDepth >= consumeDepth or lastBullFvgTests > maxRetests or bar_index - lastBullFvgAt > maxZoneAge or (htfMode != "Off" and not htfAgreeBull)
+        lastBullFvgLive := false
+if barstate.isconfirmed and lastBearFvgLive and bar_index > lastBearFvgAt
+    bool bearTouchNow = high >= lastBearFvgBot and low <= lastBearFvgTop
+    if bearTouchNow and not lastBearFvgTouching
+        lastBearFvgTests += 1
+    lastBearFvgTouching := bearTouchNow
+    float bearDepth = bearTouchNow ? (high - lastBearFvgBot) / (lastBearFvgTop - lastBearFvgBot) : 0.0
+    if bearDepth >= consumeDepth or lastBearFvgTests > maxRetests or bar_index - lastBearFvgAt > maxZoneAge or (htfMode != "Off" and not htfAgreeBear)
+        lastBearFvgLive := false
+if bullFVG
+    lastBullFvgAt := bar_index
+    lastBullFvgTop := low
+    lastBullFvgBot := high[2]
+    lastBullFvgLive := true
+    lastBullFvgTests := 0
+    lastBullFvgTouching := false
+    f_baseZone("FVG ↑", 1, low, high[2], bar_index - 2, bullFvgScore)
+if bearFVG
+    lastBearFvgAt := bar_index
+    lastBearFvgTop := low[2]
+    lastBearFvgBot := high
+    lastBearFvgLive := true
+    lastBearFvgTests := 0
+    lastBearFvgTouching := false
+    f_baseZone("FVG ↓", -1, low[2], high, bar_index - 2, bearFvgScore)
+
+// OB requires a confirmed structural break WITH a strong breakout candle,
+// a close outside the original OB, and sensible ATR-normalized boundaries.
+[obBullTop, obBullBot, obBullAt] = f_findOb(1, math.min(obLookback, maxObOriginAge))
+[obBearTop, obBearBot, obBearAt] = f_findOb(-1, math.min(obLookback, maxObOriginAge))
+bool bullNearGap = lastBullFvgLive and not na(lastBullFvgAt) and bar_index - lastBullFvgAt <= nearFvgBars
+bool bearNearGap = lastBearFvgLive and not na(lastBearFvgAt) and bar_index - lastBearFvgAt <= nearFvgBars
+int bullObScore = f_qualityScore(not na(atr) and atr > 0 ? body0 / atr : 0.0, efficiency0, bullBreak, htfAgreeBull, bullNearGap or recentBullSweep, not na(obBullTop) and close > obBullTop + atr * minDepartureAtr)
+int bearObScore = f_qualityScore(not na(atr) and atr > 0 ? body0 / atr : 0.0, efficiency0, bearBreak, htfAgreeBear, bearNearGap or recentBearSweep, not na(obBearBot) and close < obBearBot - atr * minDepartureAtr)
+bool bullStrongBOS = bullBreak and close > open and not na(swingHigh) and close >= swingHigh + minBreakCloseAtr * atr and body0 >= minBreakBodyAtr * atr and efficiency0 >= minBodyRatio
+bool bearStrongBOS = bearBreak and close < open and not na(swingLow) and close <= swingLow - minBreakCloseAtr * atr and body0 >= minBreakBodyAtr * atr and efficiency0 >= minBodyRatio
+bool validBullOB = bullStrongBOS and htfAgreeBull and volumeOK0 and f_widthPass(obBullTop, obBullBot) and close > obBullTop + atr * minDepartureAtr and f_scorePass(bullObScore)
+bool validBearOB = bearStrongBOS and htfAgreeBear and volumeOK0 and f_widthPass(obBearTop, obBearBot) and close < obBearBot - atr * minDepartureAtr and f_scorePass(bearObScore)
+if validBullOB
+    f_baseZone("BULL OB", 1, obBullTop, obBullBot, obBullAt, bullObScore)
+if validBearOB
+    f_baseZone("BEAR OB", -1, obBearTop, obBearBot, obBearAt, bearObScore)
+
+// ── FILTERS ───────────────────────────────────────────────────────────────────
+bool biasLong = htfMode == "Off" or htfBias == 1
+bool biasShort = htfMode == "Off" or htfBias == -1
+bool recentBullPoi = not na(lastBullPoiAt) and bar_index - lastBullPoiAt <= poiMemory
+bool recentBearPoi = not na(lastBearPoiAt) and bar_index - lastBearPoiAt <= poiMemory
+bool allowOtherLong = biasLong and (htfMode != "POI + Sweep" or recentBullPoi)
+bool allowOtherShort = biasShort and (htfMode != "POI + Sweep" or recentBearPoi)
+
+bool shiftBullCandle = close > open and math.abs(close - open) >= shiftBodyAtr * atr
+bool shiftBearCandle = close < open and math.abs(close - open) >= shiftBodyAtr * atr
+bool bullSweepShift = bullBreak and shiftBullCandle and not na(lastBullSweepAt) and bar_index > lastBullSweepAt and bar_index - lastBullSweepAt <= sweepWindow
+bool bearSweepShift = bearBreak and shiftBearCandle and not na(lastBearSweepAt) and bar_index > lastBearSweepAt and bar_index - lastBearSweepAt <= sweepWindow
+bool allowSweepLong = biasLong and (htfMode != "POI + Sweep" or bullSweepAtPoi)
+bool allowSweepShort = biasShort and (htfMode != "POI + Sweep" or bearSweepAtPoi)
+
+bool newLongPlan = false
+bool newShortPlan = false
+
+// Queue in ascending priority. On a shared retest bar, latest enqueued wins:
+// M1 (most specific) > M2 > M3.
+if useM3 and bullFVG and structureDir == 1 and allowOtherLong
+    newLongPlan := f_pending("M3 FVG", 1, low, high[2], math.min(low[1], high[2])) or newLongPlan
+if useM3 and bearFVG and structureDir == -1 and allowOtherShort
+    newShortPlan := f_pending("M3 FVG", -1, low[2], high, math.max(high[1], low[2])) or newShortPlan
+
+if useM2 and validBullOB and oldStructureDir == 1 and allowOtherLong and (not requireFvgOB or bullNearGap)
+    newLongPlan := f_pending("M2 OB", 1, obBullTop, obBullBot, obBullBot) or newLongPlan
+if useM2 and validBearOB and oldStructureDir == -1 and allowOtherShort and (not requireFvgOB or bearNearGap)
+    newShortPlan := f_pending("M2 OB", -1, obBearTop, obBearBot, obBearTop) or newShortPlan
+
+if useM1 and bullSweepShift and allowSweepLong
+    if validBullOB
+        newLongPlan := f_pending("M1 SWEEP+OB", 1, obBullTop, obBullBot, lastBullSweepLow) or newLongPlan
+    else if bullNearGap
+        newLongPlan := f_pending("M1 SWEEP+FVG", 1, lastBullFvgTop, lastBullFvgBot, lastBullSweepLow) or newLongPlan
+if useM1 and bearSweepShift and allowSweepShort
+    if validBearOB
+        newShortPlan := f_pending("M1 SWEEP+OB", -1, obBearTop, obBearBot, lastBearSweepHigh) or newShortPlan
+    else if bearNearGap
+        newShortPlan := f_pending("M1 SWEEP+FVG", -1, lastBearFvgTop, lastBearFvgBot, lastBearSweepHigh) or newShortPlan
+
+// Sweep may only generate a single shift setup.
+if bullSweepShift
+    lastBullSweepAt := na
+if bearSweepShift
+    lastBearSweepAt := na
+
+// ── DRAW CURRENT HTF POI ──────────────────────────────────────────────────────
+var box htfBox = na
+bool validHTFPoi = not localHtfInvalid and htfPoiSide != 0 and not na(htfPoiTop) and not na(htfPoiBot) and htfPoiTop > htfPoiBot
+if showHtfPoi and validHTFPoi
+    bool changed = na(htfBox) or htfPoiSide != htfPoiSide[1] or htfPoiTop != htfPoiTop[1] or htfPoiBot != htfPoiBot[1]
+    if changed
+        if not na(htfBox)
+            box.delete(htfBox)
+        htfBox := box.new(left=bar_index, top=htfPoiTop, right=bar_index + zoneForward, bottom=htfPoiBot, bgcolor=color.new(cHTF, 88), border_color=cHTF, text="HTF " + htfTF + " POI " + (htfPoiSide == 1 ? "BUY" : "SELL"), text_color=cHTF, text_size=txtSz)
+    else
+        box.set_right(htfBox, bar_index + zoneForward)
+else
+    if not na(htfBox)
+        box.delete(htfBox)
+        htfBox := na
+
+// ── REMOVE INVALID / EXPIRED / MITIGATED BASE ZONES ────────────────────────
+// Reverse iteration means array.remove() never skips an unprocessed zone.
+// The chart therefore contains only zones still considered active by the rules.
+bool removedZoneBar = false
+if barstate.isconfirmed and array.size(baseBoxes) > 0
+    int countZones = array.size(baseBoxes)
+    for off = 0 to countZones - 1
+        int i = countZones - 1 - off
+        int side = array.get(baseSide, i)
+        float top = array.get(baseTop, i)
+        float bottom = array.get(baseBot, i)
+        int born = array.get(baseBorn, i)
+        bool afterBirth = bar_index > born
+        bool touched = afterBirth and low <= top and high >= bottom
+        bool previouslyTouched = array.get(baseWasTouch, i)
+        int tests = array.get(baseTouches, i)
+        if touched and not previouslyTouched
+            tests += 1
+            array.set(baseTouches, i, tests)
+        array.set(baseWasTouch, i, touched)
+        float depth = touched ? (side == 1 ? (top - low) / (top - bottom) : (high - bottom) / (top - bottom)) : 0.0
+        bool deepMitigation = touched and depth >= consumeDepth
+        bool brokeWick = side == 1 ? low < bottom - invalidBufferAtr * atr : high > top + invalidBufferAtr * atr
+        bool brokeClose = side == 1 ? close < bottom - invalidBufferAtr * atr : close > top + invalidBufferAtr * atr
+        bool broken = afterBirth and (invalidBy == "Wick" ? brokeWick : brokeClose)
+        bool overtested = tests > maxRetests
+        bool oldZone = bar_index - born > maxZoneAge
+        float distanceAtr = atr > 0 ? (side == 1 ? math.max(0.0, close - top) / atr : math.max(0.0, bottom - close) / atr) : 0.0
+        bool tooFar = afterBirth and distanceAtr > maxZoneDistance
+        bool wrongHtf = htfMode != "Off" and (side == 1 ? htfBias != 1 : htfBias != -1)
+        if broken or deepMitigation or overtested or oldZone or tooFar or wrongHtf
+            f_removeBase(i)
+            removedZoneBar := true
+        else
+            box.set_right(array.get(baseBoxes, i), bar_index + zoneForward)
+
+// ── MANAGE LIVE TRADES: SL WINS IF SL AND TP TOUCH ON SAME BAR ────────────────
+bool hitTPBar = false
+bool hitSLBar = false
+bool busyThisBar = false
+if array.size(trSide) > 0
+    for i = 0 to array.size(trSide) - 1
+        if array.get(trStatus, i) == 0
+            busyThisBar := true
+            int d = array.get(trSide, i)
+            float s = array.get(trSL, i)
+            float t = array.get(trTP, i)
+            int b = array.get(trBorn, i)
+            bool stopHit = barstate.isconfirmed and bar_index > b and (d == 1 ? low <= s : high >= s)
+            bool takeHit = barstate.isconfirmed and bar_index > b and (d == 1 ? high >= t : low <= t)
+            if stopHit or takeHit
+                array.set(trStatus, i, stopHit ? -1 : 1)
+                hitSLBar := hitSLBar or stopHit
+                hitTPBar := hitTPBar or (not stopHit and takeHit)
+                if stopHit
+                    label.set_text(array.get(trTextS, i), "✕ SL HIT  " + f_price(s))
+                else
+                    label.set_text(array.get(trTextT, i), "✓ TP HIT  " + f_price(t))
+            // Berhenti persis di candle TP/SL; trade aktif mengikuti candle terkini.
+            int endX = (stopHit or takeHit) ? bar_index : bar_index + setupLeadBars
+            f_updateSetupLevel(array.get(trLineE, i), array.get(trRightE, i), array.get(trTextE, i), endX)
+            f_updateSetupLevel(array.get(trLineS, i), array.get(trRightS, i), array.get(trTextS, i), endX)
+            f_updateSetupLevel(array.get(trLineT, i), array.get(trRightT, i), array.get(trTextT, i), endX)
+
+// ── SIMULATE RETEST OF PENDING LIMITS (ONLY AFTER CREATION BAR) ───────────────
+bool filledBuyBar = false
+bool filledSellBar = false
+if barstate.isconfirmed and array.size(pSide) > 0
+    int count = array.size(pSide)
+    for off = 0 to count - 1
+        int j = count - 1 - off
+        int d = array.get(pSide, j)
+        float e = array.get(pEntry, j)
+        float zoneTop = array.get(pZoneTop, j)
+        float zoneBot = array.get(pZoneBot, j)
+        float s = array.get(pSL, j)
+        float t = array.get(pTP, j)
+        int born = array.get(pBorn, j)
+        box pendingBox = array.get(pBox, j)
+        bool expired = bar_index - born > pendingLife
+        bool touched = bar_index > born and low <= e and high >= e
+        bool touchedZone = bar_index > born and low <= zoneTop and high >= zoneBot
+        bool wasTouching = array.get(pWasTouch, j)
+        int visits = array.get(pTouches, j)
+        if touchedZone and not wasTouching
+            visits += 1
+            array.set(pTouches, j, visits)
+        array.set(pWasTouch, j, touchedZone)
+        // If a zone was tapped before its order level, it is no longer fresh
+        // when allowed retests are exhausted. Never create a belated signal.
+        bool lostFreshness = touchedZone and visits > maxRetests and not touched
+        bool crossedStop = d == 1 ? low <= s : high >= s
+        float buffer = invalidBufferAtr * atr
+        bool invalidByWick = d == 1 ? low < zoneBot - buffer : high > zoneTop + buffer
+        bool invalidByClose = d == 1 ? close < zoneBot - buffer : close > zoneTop + buffer
+        bool invalid = bar_index > born and (invalidBy == "Wick" ? invalidByWick : invalidByClose)
+        bool wrongBias = htfMode != "Off" and (d == 1 ? htfBias != 1 : htfBias != -1)
+        if expired or wrongBias or lostFreshness or (invalid and not touched)
+            f_removePending(j, false)
+        else if touched and not busyThisBar
+            string model = array.get(pModel, j)
+            f_fill(model, d, e, s, t, pendingBox)
+            f_removePending(j, true)
+            busyThisBar := true
+            filledBuyBar := d == 1
+            filledSellBar := d == -1
+            // Conservative assumption: entry and SL within the same candle = SL.
+            if crossedStop
+                // TP/SL menyentuh candle entry: hentikan semua garis pada bar ini.
+                int k = array.size(trStatus) - 1
+                array.set(trStatus, k, -1)
+                label.set_text(array.get(trTextS, k), "✕ SL HIT  " + f_price(s))
+                f_updateSetupLevel(array.get(trLineE, k), array.get(trRightE, k), array.get(trTextE, k), bar_index)
+                f_updateSetupLevel(array.get(trLineS, k), array.get(trRightS, k), array.get(trTextS, k), bar_index)
+                f_updateSetupLevel(array.get(trLineT, k), array.get(trRightT, k), array.get(trTextT, k), bar_index)
+                hitSLBar := true
+        else if touched and busyThisBar
+            // Keep other candidates pending, subject to normal expiry.
+            if not na(pendingBox)
+                box.set_right(pendingBox, bar_index + zoneForward)
+        else
+            if not na(pendingBox)
+                box.set_right(pendingBox, bar_index + zoneForward)
+
+// ── ALERTS ────────────────────────────────────────────────────────────────────
+alertcondition(removedZoneBar, "SMC Zona tidak valid dihapus", "An expired, mitigated, or invalidated SMC zone was removed on {{ticker}} ({{interval}}).")
+alertcondition(newLongPlan, "SMC New BUY Plan", "SMC BUY pending zone generated on {{ticker}} ({{interval}}).")
+alertcondition(newShortPlan, "SMC New SELL Plan", "SMC SELL pending zone generated on {{ticker}} ({{interval}}).")
+alertcondition(filledBuyBar, "SMC ENTRY BUY", "SMC BUY entry retest on {{ticker}} ({{interval}}). Check Entry / SL / TP lines.")
+alertcondition(filledSellBar, "SMC ENTRY SELL", "SMC SELL entry retest on {{ticker}} ({{interval}}). Check Entry / SL / TP lines.")
+alertcondition(hitTPBar, "SMC TAKE PROFIT", "SMC Take Profit touched on {{ticker}} ({{interval}}).")
+alertcondition(hitSLBar, "SMC STOP LOSS", "SMC Stop Loss touched on {{ticker}} ({{interval}}).")

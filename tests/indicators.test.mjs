@@ -1,0 +1,13 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {sma,ema,rsi,bollinger,macd} from '../src/indicators.js';
+import {compilePineSubset,EXAMPLE} from '../src/pine.js';
+import {emaBacktest} from '../src/backtest.js';
+const candles=Array.from({length:160},(_,i)=>{const close=100+Math.sin(i/8)*8+i*.1;return {time:1710000000+i*3600,open:close-1,high:close+2,low:close-2,close,volume:1000+i}});
+test('SMA seed values correct',()=>{assert.deepEqual(sma([2,3,4,5],3),[null,null,3,4])});
+test('EMA of constant values stable',()=>{assert.deepEqual(ema([5,5,5,5,5],3),[null,null,5,5,5])});
+test('RSI bounds',()=>{const out=rsi(candles.map(x=>x.close),14);for(const v of out){if(v!==null)assert.ok(v>=0&&v<=100)}});
+test('Bollinger bands bracket SMA',()=>{const b=bollinger(candles.map(x=>x.close),20);assert.equal(b.mid.length,candles.length);assert.ok(b.top[40]>b.mid[40]&&b.mid[40]>b.bottom[40])});
+test('MACD returns valid histogram',()=>{const m=macd(candles.map(x=>x.close));assert.ok(m.hist.some(v=>v!==null))});
+test('Pine example compiles with two lines',()=>{const lines=compilePineSubset(EXAMPLE,candles);assert.equal(lines.length,2);assert.equal(lines[0].values.length,candles.length)});
+test('Unsupported Pine functions throw explicit errors',()=>assert.throws(()=>compilePineSubset('indicator("x")\nplot(request.security("BINANCE:BTCUSDT","1D",close))',candles),/belum didukung/));
+test('Backtest uses next-bar open and nonnegative fees',()=>{const r=emaBacktest(candles,{fast:9,slow:21,capital:1000,feePercent:.1});assert.ok(r.fees>=0);assert.ok(Number.isFinite(r.equity));assert.ok(r.maxDD>=0);assert.ok(r.closedTrades>0)});

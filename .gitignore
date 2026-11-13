@@ -1,0 +1,8 @@
+# Credentials and durable alert state
+.env
+.env.*
+!.env.example
+data/
+*.log
+node_modules/
+.DS_Store

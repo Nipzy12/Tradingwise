@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#11141b" />
+  <meta name="description" content="LUMAVUN Supercharts - workspace trading interaktif dengan chart, drawing tools, indikator, watchlist, dan editor studi." />
+  <title>LUMAVUN Supercharts</title>
+  <link rel="stylesheet" href="./src/style.css" />
+  <script>
+    window.lwcReady = new Promise(resolve => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js';
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = resolve;
+      document.head.appendChild(script);
+      setTimeout(resolve, 2200);
+    });
+  </script>
+  <script defer type="module" src="./src/app.js"></script>
+</head>
+<body data-theme="dark">
+  <svg class="sprites" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-candles" viewBox="0 0 24 24"><path d="M7 2v20M17 2v20M4 8h6v9H4zM14 5h6v10h-6z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 19h18M4 14l5-6 4 3 6-7"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></symbol>
+    <symbol id="i-rewind" viewBox="0 0 24 24"><path d="m11 7-6 5 6 5V7zm9 0-6 5 6 5V7z"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="m8 8-5 4 5 4M3 12h12a5 5 0 0 1 0 10"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="m16 8 5 4-5 4M21 12H9a5 5 0 0 0 0 10"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="13" r="4"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></symbol>
+    <symbol id="i-max" viewBox="0 0 24 24"><path d="M9 4H4v5M15 4h5v5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-pointer" viewBox="0 0 24 24"><path d="m5 3 13 9-7 1-3 7z"/></symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24"><path d="m3 20 18-16"/><circle cx="3" cy="20" r="2"/><circle cx="21" cy="4" r="2"/></symbol>
+    <symbol id="i-horizontal" viewBox="0 0 24 24"><path d="M2 12h20"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-vertical" viewBox="0 0 24 24"><path d="M12 2v20"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-rectangle" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/></symbol>
+    <symbol id="i-fibo" viewBox="0 0 24 24"><path d="M3 4h18M3 8h11M3 12h18M3 16h11M3 20h18"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 5h16M12 5v15M8 20h8"/></symbol>
+    <symbol id="i-ruler" viewBox="0 0 24 24"><path d="m4 16 12-12 4 4L8 20zM11 9l3 3M8 12l2 2"/></symbol>
+    <symbol id="i-magnet" viewBox="0 0 24 24"><path d="M5 4v10a7 7 0 0 0 14 0V4h-5v10a2 2 0 0 1-4 0V4z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M5 3h14v18l-7-5-7 5z"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M2 12h5l3-8 5 16 3-8h4"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h1M3 12h1M3 18h1"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 2v14m-5-5 5 5 5-5M4 18v3h16v-3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 18V4m-5 5 5-5 5 5M4 18v3h16v-3"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5 5 19"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 4 12 8-12 8z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5v14M17 5v14"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M4 3h14l3 3v15H3V3zM7 3v7h10V3M7 21v-8h10v8"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2 3.1 6.3 7 .9-5.1 4.9 1.3 6.9-6.3-3.3-6.3 3.3 1.3-6.9L2 9.2l7-.9z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 16.5A9 9 0 0 1 7.5 4 9 9 0 1 0 20 16.5z"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 11v6M12 7v.2"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 24 24"><path d="M3 20V4M3 20h18M7 15l4-5 4 3 5-8"/></symbol>
+  </svg>
+  <div id="app">
+    <header class="topbar">
+      <div class="top-left">
+        <button class="iconbtn brand-menu" id="menuBtn" title="Menu"><svg><use href="#i-menu"/></svg></button>
+        <div class="brand" title="LUMAVUN Supercharts"><span class="brand-mark">◕</span><span class="brand-word">LUMAVUN</span><span class="brand-suffix">CHARTING</span></div>
+        <span class="vsep"></span>
+        <button id="symbolBtn" class="pair-trigger" title="Cari simbol (Ctrl+K)"><svg><use href="#i-search"/></svg><strong id="currentSymbol">BTCUSDT</strong><svg class="tiny"><use href="#i-chevron"/></svg></button>
+        <button class="iconbtn optional" id="compareBtn" title="Bandingkan simbol"><svg><use href="#i-compare"/></svg></button>
+        <span class="vsep"></span>
+        <div class="tfgroup" id="tfGroup"><button class="tf" data-tf="1m">1m</button><button class="tf" data-tf="3m">3m</button><button class="tf" data-tf="5m">5m</button><button class="tf" data-tf="15m">15m</button><button class="tf" data-tf="30m">30m</button><button class="tf" data-tf="1h">1H</button><button class="tf" data-tf="2h">2H</button><button class="tf" data-tf="4h">4H</button><button class="tf" data-tf="1d">D</button><button class="tf" data-tf="1w">W</button></div>
+        <span class="vsep"></span>
+        <button class="iconbtn typebtn" id="chartTypeBtn" title="Jenis chart"><svg><use href="#i-candles"/></svg><svg class="tiny"><use href="#i-chevron"/></svg></button>
+        <span class="vsep optional"></span>
+        <button class="header-action" id="indicatorsBtn"><svg><use href="#i-activity"/></svg><span>Indicators</span></button>
+        <button class="header-action optional" id="alertBtn"><svg><use href="#i-bell"/></svg><span>Alert</span></button>
+        <button class="header-action optional" id="replayBtn"><svg><use href="#i-rewind"/></svg><span>Replay</span></button>
+      </div>
+      <div class="top-right">
+        <button class="iconbtn optional" id="undoBtn" title="Undo drawing"><svg><use href="#i-undo"/></svg></button>
+        <button class="iconbtn optional" id="redoBtn" title="Redo drawing"><svg><use href="#i-redo"/></svg></button>
+        <span class="vsep optional"></span>
+        <button class="iconbtn optional" id="layoutBtn" title="Atur layout"><svg><use href="#i-grid"/></svg></button>
+        <button class="iconbtn" id="themeBtn" title="Ganti tema"><svg><use href="#i-moon"/></svg></button>
+        <button class="iconbtn optional" id="cameraBtn" title="Snapshot chart"><svg><use href="#i-camera"/></svg></button>
+        <button class="iconbtn" id="fullscreenBtn" title="Fullscreen"><svg><use href="#i-max"/></svg></button>
+        <button class="save-btn" id="saveBtn"><svg><use href="#i-save"/></svg><span>Save</span></button>
+      </div>
+    </header>
+    <div class="workbench">
+      <aside class="leftbar" aria-label="Drawing tools">
+        <button class="tool active" data-tool="pointer" title="Cursor / Pilih"><svg><use href="#i-pointer"/></svg></button>
+        <div class="hline"></div>
+        <button class="tool" data-tool="trend" title="Trend line"><svg><use href="#i-trend"/></svg></button>
+        <button class="tool" data-tool="horizontal" title="Horizontal line"><svg><use href="#i-horizontal"/></svg></button>
+        <button class="tool" data-tool="vertical" title="Vertical line"><svg><use href="#i-vertical"/></svg></button>
+        <button class="tool" data-tool="rectangle" title="Rectangle / Zone"><svg><use href="#i-rectangle"/></svg></button>
+        <button class="tool" data-tool="fibo" title="Fibonacci retracement"><svg><use href="#i-fibo"/></svg></button>
+        <div class="hline"></div>
+        <button class="tool" data-tool="text" title="Text annotation"><svg><use href="#i-text"/></svg></button>
+        <button class="tool" data-tool="long" title="Long position (risk/reward)"><span class="pos-icon green">L</span></button>
+        <button class="tool" data-tool="short" title="Short position (risk/reward)"><span class="pos-icon red">S</span></button>
+        <button class="tool" data-tool="ruler" title="Measure"><svg><use href="#i-ruler"/></svg></button>
+        <div class="hline"></div>
+        <button class="tool" id="magnetBtn" title="Magnet snapping"><svg><use href="#i-magnet"/></svg></button>
+        <button class="tool" id="hideDrawingsBtn" title="Show/hide drawings"><svg><use href="#i-eye"/></svg></button>
+        <button class="tool" id="clearDrawingsBtn" title="Delete drawings"><svg><use href="#i-trash"/></svg></button>
+        <div class="left-spacer"></div>
+        <button class="tool" id="infoBtn" title="Tentang terminal"><svg><use href="#i-info"/></svg></button>
+      </aside>
+      <main class="middle">
+        <section class="chart-window" id="chartWindow">
+          <div class="chart-header-overlay" id="chartLegend"><div class="symbol-line"><strong id="legendTitle">BTCUSDT · Market data</strong> <span>·</span> <span id="legendInterval">1H</span> <span>·</span> <span id="legendExchange">BINANCE</span> <span id="dataBadge" class="status-pill">Menyiapkan…</span></div><div class="ohlc-line"><span>O <b id="oVal">–</b></span><span>H <b id="hVal">–</b></span><span>L <b id="lVal">–</b></span><span>C <b id="cVal">–</b></span><span id="chgVal"></span></div><div class="indicator-chips" id="indicatorChips"></div></div>
+          <div id="chartStage"><canvas id="fallbackCanvas"></canvas><div id="lightweightHost"></div><svg id="smcOverlay" xmlns="http://www.w3.org/2000/svg" aria-label="SMC indicator drawings"></svg><svg id="drawingOverlay" xmlns="http://www.w3.org/2000/svg" aria-label="Chart drawings"></svg><div class="smc-notice hidden" id="smcNotice" role="status"></div><div class="chart-watermark"><span>◕</span><strong>LUMAVUN</strong></div><div id="chartLoader" class="chart-loader">Memuat data pasar...</div></div>
+          <div id="replayControls" class="replay-controls hidden"><span>BAR REPLAY</span><button class="mini-btn" id="replayBack" title="Kembali 1 bar">◀</button><button class="mini-btn" id="replayPlay" title="Play"><svg><use href="#i-play"/></svg></button><button class="mini-btn" id="replayForward" title="Maju 1 bar">▶</button><span id="replayCounter">0 / 0</span><button class="mini-btn" id="replayExit">Selesai</button></div>
+          <div class="chart-footer"><div class="range-buttons"><button data-range="1d">1D</button><button data-range="5d">5D</button><button data-range="1m">1M</button><button data-range="3m">3M</button><button data-range="all" class="active">All</button></div><span id="chartClock">UTC</span><span class="chart-separator">|</span><span id="priceCurrency">USDT</span><button class="mini-btn" id="resetChart" title="Reset zoom">Auto</button></div>
+        </section>
+        <div class="panel-resizer" id="panelResizer" title="Drag to resize bottom panel"></div>
+        <section class="bottom-panel" id="bottomPanel">
+          <div class="panel-tabs"><button class="tab active" data-panel="pine">Pine Editor <span class="tab-sub">β</span></button><button class="tab" data-panel="tester">Strategy Tester</button><button class="tab" data-panel="trade">Trading Panel</button><div class="grow"></div><button class="iconbtn" id="panelCollapse" title="Minimize panel"><svg><use href="#i-chevron"/></svg></button></div>
+          <div class="panel-content" id="panePine"><div class="editor-toolbar"><span class="editor-label">Untitled script</span><span class="editor-badge">Pine subset</span><div class="grow"></div><button id="loadExample" class="mini-btn">Example</button><button id="exportPine" class="mini-btn"><svg><use href="#i-download"/></svg> .pine</button><button id="runPine" class="primary-tiny"><svg><use href="#i-play"/></svg> Add to chart</button></div><div class="editor-wrap"><div class="line-numbers" id="lineNumbers"></div><textarea id="pineCode" spellcheck="false" aria-label="Pine Script editor" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea></div><div class="editor-status" id="pineStatus">Editor mendukung subset: input.int, ta.ema, ta.sma, ta.rsi, plot. Bukan runtime Pine asli.</div></div>
+          <div class="panel-content hidden" id="paneTester"><div class="tester-form"><label>Fast EMA <input type="number" id="fastEMA" min="2" max="300" value="9" /></label><label>Slow EMA <input type="number" id="slowEMA" min="3" max="500" value="21" /></label><label>Modal ($) <input type="number" id="btCapital" min="1" value="1000" step="100" /></label><label>Fee tiap sisi (%) <input type="number" id="btFee" min="0" max="10" value="0.1" step="0.01" /></label><button class="primary-tiny" id="runBacktest">Run backtest</button></div><div class="tester-results" id="testerResults"><div class="placeholder">Jalankan backtest EMA crossover. Entry di pembukaan candle berikutnya; long only, fee diperhitungkan. Tidak termasuk spread/slippage.</div></div></div>
+          <div class="panel-content hidden" id="paneTrade"><div class="trade-panel-inner"><div class="trade-note">Paper trade lokal. Tidak ada order dikirim ke bursa.</div><div class="paper-box"><label>Order simulasi <select id="paperSide"><option value="buy">Buy / Long</option><option value="sell">Sell / Short</option></select></label><label>Qty (unit aset) <input type="number" id="paperQty" min="0.000001" value="0.01" step="0.01"></label><button class="primary-tiny" id="paperSubmit">Buka posisi simulasi</button></div><div class="paper-positions" id="paperPositions">Belum ada posisi.</div></div></div>
+        </section>
+      </main>
+      <aside class="rightbar" id="rightbar">
+        <div class="right-inner">
+          <div class="side-header"><strong id="rightTitle">Watchlist</strong><div class="grow"></div><button class="iconbtn" id="addSymbolBtn" title="Tambah simbol"><svg><use href="#i-plus"/></svg></button><button class="iconbtn" id="rightMoreBtn" title="Watchlist menu"><svg><use href="#i-list"/></svg></button></div>
+          <div class="side-view" id="watchlistView"><div class="watch-head"><span>Symbol</span><span>Last</span><span>Chg%</span></div><div id="watchRows" class="watch-rows"></div><div class="market-detail" id="marketDetail"><div class="detail-top"><div class="detail-logo" id="detailLogo">₿</div><div><strong id="detailSymbol">BTCUSDT</strong><p id="detailName">Bitcoin / TetherUS</p></div></div><div class="detail-price" id="detailPrice">–</div><div class="detail-change" id="detailChange">–</div><div class="detail-divider"></div><div class="detail-meta"><span>Market</span><b id="detailMarket">Crypto</b></div><div class="detail-meta"><span>Source</span><b id="detailSource">Binance API</b></div><div class="detail-meta"><span>Interval</span><b id="detailTF">1H</b></div></div></div>
+          <div class="side-view hidden" id="alertsView"><div class="side-info">Price alerts lokal hanya aktif saat tab terbuka. SMC Webhook alerts dikelola server dan aktif selama backend berjalan.</div><div id="alertList"></div><button id="sideNewAlert" class="outlined-full">+ Buat alert</button><div class="detail-divider"></div><h4 style="margin:10px 0 8px">Server SMC Webhook</h4><div id="serverAlertList"><div class="side-info">Buka tab Alerts untuk menghubungkan backend.</div></div><button id="sideTestWebhook" class="outlined-full">Test webhook</button></div>
+          <div class="side-view hidden" id="objectsView"><div class="side-info">Indikator dan objek gambar pada chart aktif.</div><div id="objectList"></div></div>
+        </div>
+        <nav class="right-icons"><button class="rail active" data-right="watchlist" title="Watchlist"><svg><use href="#i-list"/></svg></button><button class="rail" data-right="alerts" title="Alerts"><svg><use href="#i-bell"/></svg></button><button class="rail" data-right="objects" title="Object tree"><svg><use href="#i-grid"/></svg></button><div class="grow"></div><button class="rail" id="rightToggle" title="Toggle sidebar"><svg><use href="#i-chevron"/></svg></button></nav>
+      </aside>
+    </div>
+    <footer class="statusbar"><div class="status-left"><span class="connection-dot" id="connectionDot"></span><span id="connectionText">Memulai terminal...</span><span class="status-divider">|</span><span id="engineLabel">Chart engine</span></div><div class="status-right"><span>Supercharts Workspace</span><a id="tvCredit" class="tv-credit" href="https://www.tradingview.com" target="_blank" rel="noopener noreferrer">TradingView™</a><span class="status-divider">|</span><span id="localTime">--:--:--</span><button id="exportWorkspace" title="Export workspace JSON"><svg><use href="#i-download"/></svg></button><button id="importWorkspace" title="Import workspace JSON"><svg><use href="#i-upload"/></svg></button><input type="file" id="workspaceFile" accept="application/json,.json" hidden></div></footer>
+  </div>
+  <div id="modalBackdrop" class="modal-backdrop hidden"><div class="modal" role="dialog" aria-modal="true"><div class="modal-header"><strong id="modalTitle">Select</strong><button class="iconbtn" id="modalClose"><svg><use href="#i-close"/></svg></button></div><div id="modalBody"></div></div></div>
+  <div id="toastContainer" class="toast-container"></div>
+  <div id="contextMenu" class="context-menu hidden"><button id="contextReset">Reset chart</button><button id="contextScreenshot">Save snapshot</button><button id="contextClear">Remove all drawings</button></div>
+</body>
+</html>

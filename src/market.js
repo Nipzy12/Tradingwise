@@ -1,0 +1,39 @@
+// Browser market-data adapter. All prices and symbol metadata come from the Node gateway.
+export const MARKETS=[];
+export const PERIODS={'1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,'1h':3600,'2h':7200,'4h':14400,'1d':86400,'1w':604800};
+export const defaultWatchlist=['BINANCE:BTCUSDT','BINANCE:ETHUSDT','BINANCE:SOLUSDT','BINANCE:BNBUSDT','BIQUOTE:XAUUSD','BIQUOTE:EURUSD','BIQUOTE:GBPUSD'];
+const metaCache=new Map();
+export function legacyId(value){if(typeof value!=='string')return '';if(value.includes(':'))return value.toUpperCase();const s=value.toUpperCase();return /^(XAU|XAG|EUR|GBP|USD|AUD|NZD|CAD|CHF|JPY)/.test(s)?'BIQUOTE:'+s:'BINANCE:'+s}
+export function marketInfo(id){return metaCache.get(id)||{id,provider:id.split(':')[0]||'UNKNOWN',symbol:id.split(':')[1]||id,name:id.split(':')[1]||id,market:'Unknown',exchange:id.split(':')[0]||'',source:'Unverified',icon:(id.split(':')[1]||'?').slice(0,1),quoteAsset:id.endsWith('USDT')?'USDT':/^(?:USD|EUR|GBP|AUD|NZD|CAD|CHF|JPY)$/.test(id.slice(-3))?id.slice(-3):'USD'};}
+export function storeMarketInfo(items){for(const x of items){if(!x?.id)continue;const symbol=x.symbol||x.id.split(':')[1],icon=symbol.startsWith('BTC')?'₿':symbol.startsWith('ETH')?'Ξ':symbol.startsWith('XAU')?'Au':symbol.startsWith('EUR')?'€':symbol.slice(0,1);metaCache.set(x.id,{...x,icon})}}
+export function displayNum(v,id){if(!Number.isFinite(Number(v)))return '–';const n=Number(v),symbol=marketInfo(id).symbol;const precision=/^(EUR|GBP|AUD|NZD|USD|CAD|CHF|JPY)/.test(symbol)&&n<10?5:n<1?6:n<10?4:n<100?3:2;return n.toLocaleString('en-US',{minimumFractionDigits:precision,maximumFractionDigits:precision})}
+const readJson=async (url,{signal}={})=>{const response=await fetch(url,{signal,cache:'no-store',headers:{accept:'application/json'}});const payload=await response.json().catch(()=>({}));if(!response.ok)throw Error(payload.error||`Backend HTTP ${response.status}`);return payload};
+export async function searchSymbols({provider='ALL',q='',limit=70,offset=0,signal}={}){const params=new URLSearchParams({provider,q,limit:String(limit),offset:String(offset)});const data=await readJson('/api/market/symbols?'+params,{signal});storeMarketInfo(data.items||[]);return data}
+export async function getCandles(id,interval='1h'){
+ const params=new URLSearchParams({symbol:id,interval,limit:'650'});
+ const result=await readJson('/api/market/candles?'+params);
+ if(!Array.isArray(result.candles)||!result.candles.length)throw Error('Provider returned no candles');
+ return {candles:result.candles,source:'rest',note:`${result.provider} REST${result.aggregated?' · 1W aggregated from 1D':''}`,aggregated:result.aggregated,lastUpdate:result.lastUpdate};
+}
+export async function fetchTickers(ids){if(!ids.length)return[];const params=new URLSearchParams({symbols:[...new Set(ids)].slice(0,60).join(',')});const data=await readJson('/api/market/tickers?'+params);return (data.items||[]).map(x=>({symbol:x.id,last:x.price,change:x.change,marketState:x.marketState,stale:x.stale,source:x.provider}))}
+function weekStart(timestamp){const d=new Date(timestamp*1000);return Math.floor(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-(d.getUTCDay()+6)%7)/1000)}
+export function tickToCandle(tick,last,tf){if(!tick||tick.stale||['closed','halted'].includes(tick.marketState))return null;const bucket=tf==='1w'?weekStart(tick.time):Math.floor(tick.time/PERIODS[tf])*PERIODS[tf];if(last&&bucket<last.time)return null;const price=Number(tick.price);if(!(price>0))return null;if(last&&bucket===last.time)return {...last,high:Math.max(last.high,price),low:Math.min(last.low,price),close:price,isOpen:true};return {time:bucket,open:price,high:price,low:price,close:price,volume:0,isOpen:true}}
+export function subscribeMarket(id,tf,onCandle,onStatus,onTick){
+ let stopped=false,ws=null,timer=null,retry=1200;const wsUrl=()=>new URL('/ws/market',document.baseURI).href.replace(/^http/,'ws');
+ const connect=()=>{
+  if(stopped)return;
+  try{
+   ws=new WebSocket(wsUrl());onStatus?.('connecting');
+   ws.onopen=()=>{retry=1200;ws.send(JSON.stringify({action:'subscribe',symbol:id,interval:tf}))};
+   ws.onmessage=e=>{let msg;try{msg=JSON.parse(e.data)}catch{return}
+    if(msg.type==='status'){onStatus?.(msg.status,msg.reason);return}
+    if(msg.type==='error'){onStatus?.('error',msg.message);return}
+    if(msg.type==='tick'&&msg.id===id){onTick?.(msg);return}
+    if(msg.type==='candle'&&msg.id===id&&msg.interval===tf){onCandle?.(msg.bar);return}
+   };
+   ws.onerror=()=>onStatus?.('reconnecting');
+   ws.onclose=()=>{if(stopped)return;onStatus?.('reconnecting');timer=setTimeout(connect,retry);retry=Math.min(retry*2,20000)};
+  }catch(e){onStatus?.('error',e.message);timer=setTimeout(connect,retry);retry=Math.min(retry*2,20000)}
+ };
+ connect();return ()=>{stopped=true;clearTimeout(timer);try{ws?.close()}catch{}};
+}
