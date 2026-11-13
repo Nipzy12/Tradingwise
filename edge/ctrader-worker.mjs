@@ -114,14 +114,23 @@ async function connectOpenApi(env,isLive=false){
  const close=(why='cTrader socket closed')=>{for(const [,x] of pending){clearTimeout(x.timer);x.reject(Error(why))}pending.clear();try{ws.close(1000,'done')}catch{}};
  ws.addEventListener('message',event=>{
   let packet;try{packet=JSON.parse(typeof event.data==='string'?event.data:'')}catch{return}
-  if(packet.payloadType===PROTO.ERROR){
-   // cTrader's 2142 error exposes a documented errorCode. Only forward a strict
-   // code enum and our own request stage; never forward provider descriptions.
+  if(packet.payloadType===PROTO.ERROR||packet.payloadType===50){
+   // cTrader sometimes omits clientMsgId in protocol errors. There is only
+   // one outstanding request on each connection, so correlate it safely.
    const raw=packet.payload?.errorCode;
    const code=typeof raw==='string'&&/^[A-Z][A-Z0-9_]{0,63}$/.test(raw)?raw:'UNKNOWN_ERROR';
-   const type=pending.get(packet.clientMsgId)?.type;
+   const active=pending.get(packet.clientMsgId)||(pending.size===1?[...pending.values()][0]:null);
+   const type=active?.type;
    const stage=({[PROTO.APP_AUTH_REQ]:'APP_AUTH',[PROTO.ACCOUNT_LIST_REQ]:'ACCOUNT_LIST',[PROTO.ACCOUNT_AUTH_REQ]:'ACCOUNT_AUTH',[PROTO.SYMBOLS_REQ]:'SYMBOLS',[PROTO.TRENDBARS_REQ]:'TRENDBARS'})[type]||'GATEWAY';
-   close('cTrader '+stage+': '+code);
+   // Only derive predefined labels from provider text. Never echo free-form
+   // descriptions, which could include access tokens or user information.
+   const description=String(packet.payload?.description||'');
+   const missing=/\bmissing required fields?:\s*([A-Za-z][A-Za-z0-9]*)\b/i.exec(description);
+   const allowedFields=new Set(['clientId','clientSecret','accessToken','ctidTraderAccountId','symbolId','period','fromTimestamp','toTimestamp','clientMsgId']);
+   const hint=missing&&allowedFields.has(missing[1])?'MISSING_'+missing[1].toUpperCase():
+    /invalid clientMsgId/i.test(description)?'INVALID_MESSAGE_ID':
+    /invalid clientRequestId/i.test(description)?'INVALID_REQUEST_ID':'';
+   close('cTrader '+stage+': '+code+(hint?' ('+hint+')':''));
    return;
   }
   const id=packet.clientMsgId;const item=pending.get(id);
