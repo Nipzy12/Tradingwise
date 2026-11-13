@@ -75,3 +75,40 @@ test('successful callback writes encrypted session and sets Secure HttpOnly cook
   assert.match(cipher,/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);assert.doesNotMatch(cipher,/not-public/);
  }finally{globalThis.fetch=old}
 });
+
+test('Cloudflare fetch uses supported manual redirect mode for token exchange',async()=>{
+ const e=env(),{state,cookie}=await stateCookie(e),before=globalThis.fetch;
+ let requests=0;
+ globalThis.fetch=async (url,options={})=>{
+  requests++;
+  assert.equal(new URL(url).origin,'https://openapi.ctrader.com');
+  assert.equal(options.redirect,'manual');
+  return new Response(JSON.stringify({accessToken:'not-a-real-token',refreshToken:'test-only',expiresIn:60}),{status:200});
+ };
+ try{
+  const q=new URL(origin+'/api/ctrader/oauth/callback');q.searchParams.set('code','example-code');q.searchParams.set('state',state);
+  const res=await worker.fetch(new Request(q,{headers:{cookie}}),e);
+  assert.equal(res.status,302);
+  assert.equal(requests,1);
+  assert.equal(res.headers.get('location'),origin+'/?ctrader=connected');
+  assert.doesNotMatch(String(res.headers),/not-a-real-token|test-only|fake-secret/);
+ }finally{globalThis.fetch=before}
+});
+test('Unexpected token endpoint redirects are rejected without following or leaking credentials',async()=>{
+ const e=env(),{state,cookie}=await stateCookie(e),before=globalThis.fetch;
+ let requests=0;
+ globalThis.fetch=async (url,options={})=>{
+  requests++;
+  assert.equal(options.redirect,'manual');
+  return new Response(null,{status:302,headers:{location:'https://attacker.invalid/capture'}});
+ };
+ try{
+  const u=new URL(origin+'/api/ctrader/oauth/callback');u.searchParams.set('code','example-code');u.searchParams.set('state',state);
+  const r=await worker.fetch(new Request(u,{headers:{cookie}}),e);
+  const result=await r.json();
+  assert.equal(r.status,502);
+  assert.equal(result.code,'TOKEN_REDIRECT_BLOCKED');
+  assert.equal(requests,1);
+  assert.doesNotMatch(JSON.stringify(result),/example-code|fake-secret|attacker\.invalid/);
+ }finally{globalThis.fetch=before}
+});
