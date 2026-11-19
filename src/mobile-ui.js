@@ -1,4 +1,6 @@
 import {favoriteWheel,supportsTimeframe,nativeQuote,tfLabel,CURRENCIES,readRate,makeDisplay} from './mobile-preferences.js';
+import {TOOL_CATALOG} from './drawing-model.js';
+import {marketFilter,mergeCatalogPage,shellRoute} from './mobile-shell-model.js';
 const $=id=>document.getElementById(id);
 export const isMobileLayout=()=>window.matchMedia('(max-width: 760px)').matches;
 const esc=x=>String(x??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -31,9 +33,46 @@ function wheel(root,{items,selected,label,choose,open}){
   root.scrollTop=Math.max(0,values.indexOf(current))*rowHeight;
  }};
 }
-export function mountMobileUI({state,chart,ui,marketInfo,updateSymbol,updateTF,openModal,closeModal,setRight,setPanel,toast,renderDetails,searchSymbols}){
+export function mountMobileUI({state,chart,ui,drawingLayer,marketInfo,updateSymbol,updateTF,openModal,closeModal,setRight,setPanel,toast,renderDetails,renderWatchlist,refreshTickers,persist,searchSymbols,CATALOG,toggleIndicator}){
  let pairWheel,tfWheel,display=null,quote=null,quoteRequest=0,quoteAbort=null,lastSymbol='',installed=false,queued=false,previousMobile=false,fxCache=new Map();
  const prefs=()=>ui.exportPrefs();
+ let page='chart',watchFilter='ALL',exploreProvider='BIQUOTE',exploreItems=[],exploreOffset=0,exploreTotal=0,exploreController=null,exploreSeq=0,exploreTimer=null,exploreLoading=false;
+ let favoritesOpen=false;
+ const svg=id=>'<svg aria-hidden="true"><use href="#i-'+esc(id)+'"/></svg>';
+ function updateWatchCount(){
+  const rows=$('watchRows');if(!rows)return;let count=0;
+  rows.querySelectorAll('[data-symbol]').forEach(row=>{const yes=marketFilter(watchFilter,row.dataset.provider,row.dataset.favorite==='true');row.classList.toggle('mobile-filter-hidden',!yes);if(yes)count++});
+  $('mobileWatchCount').textContent=count+' / '+state.watchlist.length+' simbol';
+ }
+ function renderToolStrip(){
+  const bar=$('mobileToolFavorites'),ids=prefs().favorites.tools.filter(id=>TOOL_CATALOG[id]);
+  bar.classList.toggle('hidden',!favoritesOpen||page!=='chart');
+  const mark='<button type="button" data-mobile-tool="pointer" title="Kursor" aria-label="Kursor">'+svg('pointer')+'</button>'+ids.map(id=>'<button type="button" data-mobile-tool="'+esc(id)+'" title="'+esc(TOOL_CATALOG[id].label)+'" aria-label="'+esc(TOOL_CATALOG[id].label)+'">'+svg(TOOL_CATALOG[id].icon.replace(/^i-/,''))+'</button>').join('')+'<button type="button" data-mobile-tool="all" title="Semua tool" aria-label="Semua tool">'+svg('grid')+'</button>';
+  if(bar.dataset.markup!==mark){bar.dataset.markup=mark;bar.innerHTML=mark}
+  bar.querySelectorAll('[data-mobile-tool]').forEach(b=>{b.classList.toggle('active',b.dataset.mobileTool===drawingLayer.tool);b.setAttribute('aria-pressed',String(b.dataset.mobileTool===drawingLayer.tool))});
+ }
+ function refreshMenu(){const el=$('mobileThemeLabel');if(el)el.textContent=state.theme==='light'?'Terang':'Gelap'}
+ function fillExplore(){
+  const list=$('mobileExploreResults'),status=$('mobileExploreStatus');list.innerHTML=exploreItems.map(m=>'<div class="mobile-explore-row"><button type="button" data-explore-open="'+esc(m.id)+'"><span class="mobile-explore-icon">'+esc(m.icon||marketInfo(m.id).icon||'•')+'</span><span class="mobile-explore-symbol"><strong>'+esc(m.symbol||m.id)+'</strong><small>'+esc(m.name||m.symbol)+' · '+esc(m.provider)+'</small></span><span class="mobile-provider-label">'+esc(m.provider)+'</span></button><button type="button" data-explore-save="'+esc(m.id)+'" class="mobile-watch-add'+(state.watchlist.includes(m.id)?' added':'')+'" aria-label="'+(state.watchlist.includes(m.id)?'Sudah di daftar pantau':'Tambah ke daftar pantau')+'">'+(state.watchlist.includes(m.id)?'✓':'+')+'</button></div>').join('');
+  $('mobileExploreMore').classList.toggle('hidden',exploreLoading||exploreOffset>=exploreTotal||exploreProvider==='FAVORITES');
+  if(!exploreItems.length&&!exploreLoading&&!status.textContent)status.textContent='Tidak ada simbol.';
+ }
+ async function loadExplore(append=false){
+  if(page!=='explore')return;const seq=++exploreSeq;exploreController?.abort();exploreController=new AbortController();exploreLoading=true;
+  if(!append){exploreItems=[];exploreOffset=0;exploreTotal=0}
+  const status=$('mobileExploreStatus');status.textContent='Memuat katalog…';fillExplore();
+  try{
+   const q=$('mobileExploreSearch').value.trim(),provider=exploreProvider;
+   const result=provider==='FAVORITES'?ui.favoriteCatalog(q):await searchSymbols({q,provider,offset:exploreOffset,limit:50,signal:exploreController.signal});
+   if(seq!==exploreSeq||page!=='explore')return;
+   const items=Array.isArray(result.items)?result.items:[];exploreItems=mergeCatalogPage(exploreItems,items);exploreOffset+=items.length;exploreTotal=Number(result.total)||exploreOffset;
+   if(!items.length)exploreTotal=exploreOffset;
+   const errors=Object.entries(result.errors||{}).map(([k,v])=>k+': '+v).join(' · ');
+   status.textContent=(exploreItems.length?exploreItems.length+' / '+exploreTotal+' simbol':'Tidak ada hasil')+(errors?' · '+errors:'');
+  }catch(e){if(seq!==exploreSeq||page!=='explore')return;status.textContent='Katalog tidak tersedia · '+e.message}
+  finally{if(seq===exploreSeq){exploreLoading=false;fillExplore()}}
+ }
+
  const currencyLabel=()=>display?'≈ '+display.target:quote||nativeQuote(marketInfo(state.symbol),state.symbol)||'QUOTE';
  function setDisplay(next){
   display=next;chart.setPriceDisplay(next);$('mobileCurrencyCode').textContent=currencyLabel();$('priceCurrency').textContent=currencyLabel();
@@ -60,16 +99,37 @@ export function mountMobileUI({state,chart,ui,marketInfo,updateSymbol,updateTF,o
   $('mobileCurrencyCode').textContent=currencyLabel();$('mobileCurrency').title=display?'Konversi tampilan berdasarkan kurs referensi, bukan harga historis yang dikonversi':'Mata uang quote dari instrumen';
   $('mobileCurrency').disabled=!quote;
   $('mobileLog').setAttribute('aria-pressed',String(prefs().settings.priceScale==='logarithmic'));
-  pairWheel.render();tfWheel.render();
+  pairWheel.render();tfWheel.render();renderToolStrip();refreshMenu();
  }
  function schedule(){if(!queued){queued=true;queueMicrotask(()=>{queued=false;render()})}}
  function nav(name){document.querySelectorAll('[data-mobile-nav]').forEach(b=>{const active=b.dataset.mobileNav===name;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')})}
- function showChart(save=true){
-  $('rightbar').classList.remove('expanded');$('rightbar').classList.add('shrunk');$('bottomPanel').classList.add('collapsed');
-  if(save){ui.setLayout('sidebarCollapsed',true);ui.setLayout('panelCollapsed',true)}
-  nav('chart');chart.resize();
+ function changePage(name,save=true){
+  const next=shellRoute(name);if(page==='explore'&&name!=='explore'){exploreSeq++;exploreController?.abort();clearTimeout(exploreTimer)}
+  page=next.page;$('app').dataset.mobilePage=page;
+  $('mobileExplorePage').classList.toggle('hidden',page!=='explore');$('mobileMenuPage').classList.toggle('hidden',page!=='menu');
+  $('app').classList.remove('mobile-focus');$('mobileChartToolbar').querySelector('[data-mobile-action="focus"]')?.setAttribute('aria-pressed','false');
+  $('bottomPanel').classList.add('collapsed');
+  if(next.sidebar){setRight(next.sidebar,true);$('rightTitle').textContent=next.sidebar==='watchlist'?'Daftar Pantau':next.sidebar==='objects'?'Object tree':'Alert';updateWatchCount()}
+  else{$('rightbar').classList.remove('expanded');$('rightbar').classList.add('shrunk');if(save){ui.setLayout('sidebarCollapsed',true);ui.setLayout('panelCollapsed',true)}}
+  nav(next.tab);renderToolStrip();refreshMenu();if(page==='explore')void loadExplore();if(page==='chart'){requestAnimationFrame(()=>{chart.resize();pairWheel.render();tfWheel.render()})}
  }
- function showSidebar(name){$('bottomPanel').classList.add('collapsed');setRight(name,true);nav(name==='alerts'?'alerts':'watchlist')}
+ function showChart(save=true){changePage('chart',save)}
+ function showSidebar(name){changePage(name)}
+ function menuAction(id){
+  if(['watchlist','alerts','objects'].includes(id)){showSidebar(id);return}
+  if(id==='favorites'){ui.favoritesModal();return}
+  if(['pine','tester','trade'].includes(id)){showChart();setPanel(id);return}
+  if(id==='import'){$('workspaceFile').click();return}
+  click(id);refreshMenu()
+ }
+ function analysis(){
+  const shortcuts=[['indicatorsBtn','Indikator','activity'],['chartTypeBtn','Jenis chart','candles'],['compareBtn','Bandingkan','plus'],['alertBtn','Buat alert','bell'],['replayBtn','Bar replay','rewind'],['objects','Object tree','grid'],['pine','Pine Editor','activity'],['tester','Strategy Tester','chart'],['trade','Paper trading','candles'],['chartSettingsBtn','Pengaturan','settings']];
+  const icons='<div class="mobile-analysis-grid">'+shortcuts.map(([id,label,ic])=>'<button type="button" data-hub-action="'+id+'">'+svg(ic)+'<span>'+label+'</span></button>').join('')+'</div>';
+  const favorites=prefs().favorites.indicators.map(id=>CATALOG.find(c=>c.id===id)).filter(Boolean);
+  openModal('Pusat analisis','<div id="analysisHub">'+icons+'<div class="mobile-hub-heading">Indikator favorit</div>'+(favorites.length?favorites.map(c=>'<button type="button" class="mobile-hub-indicator" data-hub-indicator="'+esc(c.id)+'"><span>'+esc(c.name)+'</span><strong>'+(state.enabled.includes(c.id)?'Aktif ✓':'+ Tambah')+'</strong></button>').join(''):'<p class="settings-note">Beri bintang indikator untuk akses cepat.</p>')+'<div class="mobile-hub-heading">Drawing</div><button type="button" class="mobile-hub-indicator" data-hub-action="drawing"><span>Drawing Studio</span><strong>›</strong></button><button type="button" class="mobile-hub-indicator" data-hub-action="toolstrip"><span>Toolbar drawing favorit</span><strong>'+(favoritesOpen?'Aktif':'Tampilkan')+'</strong></button></div>',root=>{
+   root.onclick=e=>{const indicator=e.target.closest('[data-hub-indicator]');if(indicator){toggleIndicator(indicator.dataset.hubIndicator);analysis();return}const b=e.target.closest('[data-hub-action]');if(!b)return;const id=b.dataset.hubAction;closeModal();if(id==='drawing')drawings();else if(id==='toolstrip'){favoritesOpen=!favoritesOpen;renderToolStrip()}else menuAction(id)};
+  })
+ }
  function listModal(title,items){openModal(title,'<div class="modal-list mobile-menu-list">'+items.map((it,i)=>'<button type="button" class="modal-symbol" data-mobile-menu="'+i+'"><strong>'+esc(it[0])+'</strong><span class="right-tag">›</span></button>').join('')+'</div>',root=>{root.onclick=e=>{const b=e.target.closest('[data-mobile-menu]');if(!b)return;const item=items[Number(b.dataset.mobileMenu)];if(item){closeModal();item[1]()}}})}
  function drawings(){showChart();ui.drawingToolsModal()}
 
@@ -111,12 +171,21 @@ export function mountMobileUI({state,chart,ui,marketInfo,updateSymbol,updateTF,o
   $('mobileLegendToggle').onclick=()=>{const open=$('chartWindow').classList.toggle('mobile-info-open');$('mobileLegendToggle').setAttribute('aria-expanded',String(open))};
   $('mobileAuto').onclick=()=>{chart.autoScale();chart.fit()};
   $('mobileLog').onclick=()=>{const current=prefs().settings.priceScale;ui.setChartPreference('priceScale',current==='logarithmic'?'normal':'logarithmic')};
-  $('mobileActions').addEventListener('click',e=>{const b=e.target.closest('[data-mobile-action]');if(!b)return;const id=b.dataset.mobileAction;if(id==='drawing')drawings();else if(id==='more')more();else if(id==='focus'){const active=$('app').classList.toggle('mobile-focus');b.setAttribute('aria-pressed',String(active));chart.resize()}else click(id)});
-  document.querySelector('.mobile-nav').addEventListener('click',e=>{const b=e.target.closest('[data-mobile-nav]');if(!b)return;const n=b.dataset.mobileNav;if(n==='chart')showChart();else if(n==='watchlist'||n==='alerts'){if($('rightbar').classList.contains('expanded')&&state.rightView===n)showChart();else showSidebar(n)}else if(n==='explore')click('symbolBtn');else more()});
+  $('mobileActions').addEventListener('click',e=>{const b=e.target.closest('[data-mobile-action]');if(!b)return;const id=b.dataset.mobileAction;if(id==='drawing')drawings();else if(id==='analysis')analysis();else if(id==='more')more();else if(id==='focus'){const active=$('app').classList.toggle('mobile-focus');b.setAttribute('aria-pressed',String(active));chart.resize()}else click(id)});
+  document.querySelector('.mobile-nav').addEventListener('click',e=>{const b=e.target.closest('[data-mobile-nav]');if(b)changePage(b.dataset.mobileNav)});
+  $('mobilePanelBack').onclick=()=>showChart();
+  $('mobileWatchFilters').onclick=e=>{const b=e.target.closest('[data-watch-filter]');if(!b)return;watchFilter=b.dataset.watchFilter;for(const el of $('mobileWatchFilters').querySelectorAll('button'))el.setAttribute('aria-pressed',String(el===b));updateWatchCount()};
+  $('mobileExploreFilters').onclick=e=>{const b=e.target.closest('[data-explore-provider]');if(!b)return;exploreProvider=b.dataset.exploreProvider;for(const el of $('mobileExploreFilters').querySelectorAll('button'))el.setAttribute('aria-pressed',String(el===b));void loadExplore()};
+  $('mobileExploreSearch').oninput=()=>{clearTimeout(exploreTimer);exploreSeq++;exploreController?.abort();exploreTimer=setTimeout(()=>loadExplore(),260)};
+  $('mobileExploreRefresh').onclick=()=>loadExplore();$('mobileExploreMore').onclick=()=>{if(!exploreLoading)void loadExplore(true)};
+  $('mobileExploreResults').onclick=e=>{const save=e.target.closest('[data-explore-save]'),open=e.target.closest('[data-explore-open]');if(save){const id=save.dataset.exploreSave;if(state.watchlist.includes(id)){toast('Simbol sudah di daftar pantau');return}if(state.watchlist.length>=60){toast('Maksimal 60 simbol','error');return}state.watchlist.push(id);persist();renderWatchlist();void refreshTickers();fillExplore();toast('Simbol ditambahkan','success')}else if(open){updateSymbol(open.dataset.exploreOpen);showChart()}};
+  $('mobileMenuPage').onclick=e=>{const b=e.target.closest('[data-mobile-menu-action]');if(b)menuAction(b.dataset.mobileMenuAction)};
+  $('mobileToolFavorites').onclick=e=>{const b=e.target.closest('[data-mobile-tool]');if(!b)return;if(b.dataset.mobileTool==='all')drawings();else drawingLayer.setTool(b.dataset.mobileTool);renderToolStrip()};
+  window.addEventListener('tw:draw-tool',renderToolStrip);
   window.addEventListener('tw:ui-render',schedule);
   const mq=window.matchMedia('(max-width: 760px)');previousMobile=mq.matches;
-  mq.addEventListener?.('change',()=>{if(mq.matches&&!previousMobile){showChart(false);render()}else if(!mq.matches){$('app').classList.remove('mobile-focus');if(display)setDisplay(null)}previousMobile=mq.matches});
+  mq.addEventListener?.('change',()=>{if(mq.matches&&!previousMobile){showChart(false);render()}else if(!mq.matches){showChart(false);if(display)setDisplay(null)}previousMobile=mq.matches});
   schedule();
  }
- return {install,render,showChart,currencyLabel};
+ return {install,render,showChart,currencyLabel,updateWatchCount};
 }

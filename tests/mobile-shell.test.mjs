@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {shellRoute,marketFilter,mergeCatalogPage} from '../src/mobile-shell-model.js';
+import {readFileSync} from 'node:fs';
+test('mobile pages have distinct tabs, object tree remains chart-related',()=>{assert.deepEqual(shellRoute('objects'),{page:'objects',tab:'chart',sidebar:'objects'});assert.equal(shellRoute('explore').sidebar,null);assert.equal(shellRoute('menu').tab,'menu');assert.equal(shellRoute('invalid').page,'chart')});
+test('watchlist filters preserve provider separation and favorites',()=>{assert.equal(marketFilter('ALL','BIQUOTE',false),true);assert.equal(marketFilter('BINANCE','BIQUOTE',false),false);assert.equal(marketFilter('FAVORITES','BIQUOTE',true),true);assert.equal(marketFilter('FAVORITES','BINANCE',false),false)});
+test('catalogue pagination deduplicates by provider-qualified id',()=>{const a={id:'BIQUOTE:XAUUSD'};const b={id:'BINANCE:BTCUSDT'};assert.deepEqual(mergeCatalogPage([a],[a,b,{id:'INVALID'}]),[a,b]);assert.equal(mergeCatalogPage([a],[{...a,name:'Gold'}])[0].name,'Gold')});
+test('mobile shell surfaces and analysis controls exist without replacing chart engine',()=>{const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),css=readFileSync(new URL('../src/mobile-app.css',import.meta.url),'utf8'),ui=readFileSync(new URL('../src/mobile-ui.js',import.meta.url),'utf8');for(const id of ['mobileExplorePage','mobileMenuPage','mobileWatchFilters','mobileToolFavorites','mobileChartToolbar'])assert.ok(html.includes('id="'+id+'"'));assert.match(css,/align-items:flex-end/);assert.match(ui,/data-hub-action/);assert.match(ui,/searchSymbols\(\{q,provider,offset:exploreOffset/);assert.match(html,/id="lightweightHost"/)});
