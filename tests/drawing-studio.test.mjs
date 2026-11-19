@@ -141,3 +141,12 @@ test('Fibonacci reverse changes level direction without moving chart anchors; ol
  const ext=normalizeDrawing({type:'fibExtension',a:p(1,100),b:p(5,200),c:p(6,150),levels:[0,1],reverse:true},candles);
  assert.deepEqual(fibPrices(ext).map(x=>x.price),[150,50]);
 });
+
+test('position estimates expose target/stop percentages and resulting balance for both directions',()=>{
+ const a=p(2,100);
+ for(const [type,tp,sl] of [['long',110,96],['short',90,104]]){
+  const d=normalizeDrawing({type,a,b:p(7,tp),c:p(7,sl),risk:{balance:1000,percent:2,contract:10}},candles);
+  const s=positionStats(d);assert.equal(s.rewardPercent,10);assert.equal(s.riskPercent,4);
+  assert.equal(s.targetPnL,50);assert.equal(s.stopPnL,-20);assert.equal(s.targetBalance,1050);assert.equal(s.stopBalance,980);
+ }
+});
