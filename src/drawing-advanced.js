@@ -1,4 +1,4 @@
-import {POINT_KEYS,logicalAt,rangeStats} from './drawing-model.js';
+import {POINT_KEYS,isVariablePath,logicalAt,rangeStats} from './drawing-model.js';
 export const NOTE_TYPES=['note','priceNote','label','comment','signpost','flag','pin','idea','emoji','sticker','visualIcon'];
 const PATTERNS={xabcd:'XABCD',cypher:'XABCD',headShoulders:['LS','N1','H','N2','RS','N3','End'],abcd:'ABCD',trianglePattern:'ABC',threeDrives:['1','A','2','B','3','C'],elliottImpulse:['0','1','2','3','4','5'],elliottCorrection:['0','A','B','C'],elliottTriangle:['0','A','B','C','D','E'],elliottDouble:['0','W','X','Y'],elliottTriple:['0','W','X','Y','X','Z']};
 const fib=[.236,.382,.5,.618,.786,1,1.618,2.618];
@@ -23,7 +23,7 @@ export function estimatedProfile(candles,bins=24){
  return {lo,hi,dx,values};
 }
 export function renderAdvanced({d,a,b,c,right,bottom,line,label,rect,group,stroke,style,color,chart,point,n,xy,enc,round}){
- const t=d.type,points=POINT_KEYS.map(k=>d[k]&&point(d[k])).filter(Boolean),polygon=(ps,fill=true)=>{if(ps.length<2)return;group.push('<'+(fill?'polygon':'polyline')+' points="'+ps.map(xy).join(' ')+'" fill="'+(fill?style.fill:'none')+'" fill-opacity="'+style.opacity+'"'+stroke+' pointer-events="'+(fill?'all':'stroke')+'"/>');if(!fill)for(let i=1;i<ps.length;i++)line(ps[i-1],ps[i])};
+ const t=d.type,points=(isVariablePath(t)&&Array.isArray(d.points)?d.points.map(point):POINT_KEYS.map(k=>d[k]&&point(d[k]))).filter(Boolean),polygon=(ps,fill=true)=>{if(ps.length<2)return;group.push('<'+(fill?'polygon':'polyline')+' points="'+ps.map(xy).join(' ')+'" fill="'+(fill?style.fill:'none')+'" fill-opacity="'+style.opacity+'"'+stroke+' pointer-events="'+(fill?'all':'stroke')+'"/>');if(!fill)for(let i=1;i<ps.length;i++)line(ps[i-1],ps[i])};
  const arrow=(a,b)=>{line(a,b);const ang=Math.atan2(b.y-a.y,b.x-a.x),r=12;polygon([b,{x:b.x-r*Math.cos(ang-.5),y:b.y-r*Math.sin(ang-.5)},{x:b.x-r*Math.cos(ang+.5),y:b.y-r*Math.sin(ang+.5)}])};
  const curve=(path)=>{group.push('<path d="'+path+'" fill="none"'+stroke+' pointer-events="stroke"/><path d="'+path+'" fill="none" stroke="transparent" stroke-width="18" pointer-events="stroke"/>')};
  const circle=(center,r)=>{if(r>0&&Number.isFinite(r))group.push('<circle cx="'+n(center.x)+'" cy="'+n(center.y)+'" r="'+n(r)+'" fill="none"'+stroke+' pointer-events="stroke"/>')};
@@ -63,7 +63,7 @@ export function renderAdvanced({d,a,b,c,right,bottom,line,label,rect,group,strok
  if(t==='arrowMarker'){arrow(a,b);return true}
  if(t==='arrowUp'||t==='arrowDown'){const sign=t==='arrowUp'?-1:1;polygon([{x:a.x,y:a.y+14*sign},{x:a.x-9,y:a.y+4*sign},{x:a.x-4,y:a.y+4*sign},{x:a.x-4,y:a.y-12*sign},{x:a.x+4,y:a.y-12*sign},{x:a.x+4,y:a.y+4*sign},{x:a.x+9,y:a.y+4*sign}]);return true}
  if(t==='rotatedRectangle'){if(c){const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,nx=-dy/len,ny=dx/len,dist=(c.x-a.x)*nx+(c.y-a.y)*ny;polygon([a,b,{x:b.x+nx*dist,y:b.y+ny*dist},{x:a.x+nx*dist,y:a.y+ny*dist}])}else line(a,b);return true}
- if(t==='path'||t==='polyline'){polygon(points,false);if(t==='path'&&points.length>1)arrow(points.at(-2),points.at(-1));return true}
+ if(isVariablePath(t)){polygon(points,t==='polyline'&&d.closed===true);if(t==='path'&&points.length>1)arrow(points.at(-2),points.at(-1));return true}
  if(t==='arc'||t==='curve'||t==='doubleCurve'){if(c){let path='M'+xy(a)+' Q'+xy(b)+' '+xy(c);if(t==='doubleCurve'&&points.length>=5)path+=' Q'+xy(points[3])+' '+xy(points[4]);curve(path)}else line(a,b);return true}
  if(NOTE_TYPES.includes(t)){let s=d.text||({emoji:'⭐',sticker:'🚀',visualIcon:'♥',flag:'⚑',pin:'●',idea:'💡'}[t]||'Note');if(t==='priceNote')s+=' · '+chart.formatPrice(d.a.price);if(['note','priceNote','comment','label','signpost'].includes(t))rect(a.x+2,a.y-25,a.x+Math.min(220,Math.max(43,s.length*6.7+11)),a.y+2,style.fill,.22,color);if(t==='flag')line(a,{x:a.x,y:a.y-30});text(a,s,['emoji','sticker','visualIcon'].includes(t)?25:13);return true}
  return false;

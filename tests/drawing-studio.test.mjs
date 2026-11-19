@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {TOOL_CATALOG,TOOL_IDS,timeAt,logicalAt,anchor,normalizeDrawing,shiftDrawing,positionStats,seedPosition,fibPrices,clipLine,rangeStats} from '../src/drawing-model.js';
+import {TOOL_CATALOG,TOOL_IDS,POINT_KEYS,timeAt,logicalAt,anchor,normalizeDrawing,shiftDrawing,positionStats,seedPosition,fibPrices,clipLine,rangeStats} from '../src/drawing-model.js';
 import {DrawingLayer} from '../src/drawings.js';
 import {heikinAshi,toSeriesData} from '../src/chart-display.js';
 import {normalizeUiPreferences,toggleFavorite} from '../src/ui-preferences.js';
@@ -77,4 +77,76 @@ test('drawing studio is wired across mobile, desktop and object tree; original p
  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8'),mobile=readFileSync(new URL('../src/mobile-ui.js',import.meta.url),'utf8');
  for(const id of ['drawingToolsBtn','drawingQuickBar','drawingHint','keepDrawingBtn','lockDrawingsBtn','drawingDataValues'])assert.ok(html.includes('id="'+id+'"'));
  assert.match(mobile,/ui\.drawingToolsModal\(\)/);assert.match(app,/openDrawingProperties/);assert.match(app,/drawingLayer\.setReady\(false\)/);assert.match(app,/subscribeMarket\(/);
+});
+
+test('every implemented drawing can be placed, selected, duplicated, undone and removed',()=>{
+ for(const type of TOOL_IDS){
+  const l=layer();l.tool=type;
+  const prev=globalThis.prompt;globalThis.prompt=()=> 'Test';
+  try{
+   const count=TOOL_CATALOG[type].points;
+   if(type==='brush'||type==='highlighter'){const a=event(1,100),b=event(2,104),c=event(3,101);l.down(a);l.move(b);l.move(c);l.up(c)}
+   else {for(let i=0;i<count;i++){const e=event(i+1,100+(i%2?7:-2)+i);l.down(e);l.up(e)}if(type==='path'||type==='polyline')l.finishPath();}
+   assert.equal(l.drawings.length,1,type+' created');const id=l.drawings[0].id;
+   assert.equal(l.selected,id,type+' selected');assert.equal(l.pending,null,type+' placement finished');
+   const copy=l.duplicate(id);assert.ok(copy&&copy!==id,type+' duplicate');assert.equal(l.drawings.length,2);
+   l.undo();assert.equal(l.drawings.length,1);l.redo();assert.equal(l.drawings.length,2);
+   l.remove(copy);l.remove(id);assert.equal(l.drawings.length,0,type+' removed');
+  }finally{if(prev===undefined)delete globalThis.prompt;else globalThis.prompt=prev}
+ }
+});
+
+test('all supported drawing types produce chart geometry, not merely an object record',()=>{
+ const saved=globalThis.document;globalThis.document={getElementById:()=>null};
+ try{
+  for(const type of TOOL_IDS){
+   const l=layer(),raw={type,text:'Test'};
+   const count=TOOL_CATALOG[type].points;
+   for(let i=0;i<count;i++)raw[POINT_KEYS[i]]=p(i+1,100+(i%2?6:0)+i);
+   if(type==='long'||type==='short')Object.assign(raw,seedPosition(type,raw.a,raw.b,candles));
+   if(type==='brush'||type==='highlighter')raw.points=[raw.a,raw.b];
+   const d=normalizeDrawing(raw,candles);assert.ok(d,type+' normalize');
+   l.drawings=[d];l.selected=null;l.preview=null;l.hidden=false;l.bounds=()=>({w:600,h:400,right:540,bottom:360});
+   l.svg={innerHTML:'',setAttribute(){}};
+   l.chart={candles,logicalToCoordinate:i=>20+i*35,priceToCoordinate:y=>350-y*2,formatPrice:String};
+   DrawingLayer.prototype.render.call(l);
+   const markup=l.svg.innerHTML.split('<g data-drawing-id=')[1]||'';
+   assert.match(markup,/<(?:line|rect|polygon|polyline|path|circle|ellipse|text)\b/,type+' renders visible geometry');
+   assert.doesNotMatch(markup,/NaN|Infinity/,type+' finite geometry');
+  }
+ }finally{if(saved===undefined)delete globalThis.document;else globalThis.document=saved}
+});
+
+test('path and polyline accept arbitrary anchor counts, finish explicitly, and retain every edited vertex',()=>{
+ for(const type of ['path','polyline']){
+  const l=layer();l.tool=type;
+  for(let i=1;i<=9;i++){const e=event(i,100+i);l.down(e);l.up(e)}
+  assert.equal(l.drawings.length,0,type+' remains in placement until finished');
+  assert.equal(l.pending.anchors.length,9);
+  assert.equal(l.finishPath(type==='polyline'),true);
+  const d=l.drawings[0];assert.equal(d.points.length,9);assert.equal(d.closed,type==='polyline');
+  assert.equal(d.b.price,109);
+  const shifted=shiftDrawing(d,candles,1,2);assert.equal(shifted.points[8].price,111);
+  const legacy=normalizeDrawing({type,a:p(1,100),b:p(2,101),c:p(3,102),d:p(4,103)},candles);
+  assert.equal(legacy.points.length,4);
+ }
+});
+test('Fibonacci reverse changes level direction without moving chart anchors; old objects preserve orientation',()=>{
+ const normal=normalizeDrawing({type:'fibo',a:p(1,100),b:p(5,200),levels:[0,.5,1]},candles);
+ const reverse=normalizeDrawing({...normal,reverse:true,style:{...normal.style,extendLeft:true}},candles);
+ assert.deepEqual(fibPrices(normal).map(x=>x.price),[100,150,200]);
+ assert.deepEqual(fibPrices(reverse).map(x=>x.price),[200,150,100]);
+ assert.equal(reverse.style.extendLeft,true);
+ assert.equal(reverse.a.price,100);
+ const ext=normalizeDrawing({type:'fibExtension',a:p(1,100),b:p(5,200),c:p(6,150),levels:[0,1],reverse:true},candles);
+ assert.deepEqual(fibPrices(ext).map(x=>x.price),[150,50]);
+});
+
+test('position estimates expose target/stop percentages and resulting balance for both directions',()=>{
+ const a=p(2,100);
+ for(const [type,tp,sl] of [['long',110,96],['short',90,104]]){
+  const d=normalizeDrawing({type,a,b:p(7,tp),c:p(7,sl),risk:{balance:1000,percent:2,contract:10}},candles);
+  const s=positionStats(d);assert.equal(s.rewardPercent,10);assert.equal(s.riskPercent,4);
+  assert.equal(s.targetPnL,50);assert.equal(s.stopPnL,-20);assert.equal(s.targetBalance,1050);assert.equal(s.stopBalance,980);
+ }
 });
