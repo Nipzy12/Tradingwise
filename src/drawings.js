@@ -261,7 +261,9 @@ export class DrawingLayer{
    }else if(position(t)){
     const stats=positionStats(d);if(c&&stats){const start=Math.min(a.x,b.x),end=Math.max(a.x+12,b.x,a.x);
      rect(start,a.y,end,b.y,'#089981',.23,'#089981');rect(start,a.y,end,c.y,'#f23645',.23,'#f23645');line({x:start,y:a.y},{x:end,y:a.y});
-     label(start+4,Math.min(a.y,b.y)+13,'TP '+this.chart.formatPrice(d.b.price)+' · RR '+stats.rr.toFixed(2),'#58d5b8');label(start+4,Math.max(a.y,c.y)-4,'SL '+this.chart.formatPrice(d.c.price)+' · Qty '+round(stats.qty),'#ff8d9b');
+     label(start+4,b.y+(t==='long'?13:-4),'TP '+this.chart.formatPrice(d.b.price)+' · '+round(stats.rewardPercent)+'% · +'+round(stats.targetPnL),'#58d5b8');
+     label(start+4,c.y+(t==='long'?-4:13),'SL '+this.chart.formatPrice(d.c.price)+' · '+round(stats.riskPercent)+'% · '+round(stats.stopPnL),'#ff8d9b');
+     label(start+4,a.y-4,'Entry '+this.chart.formatPrice(d.a.price)+' · RR '+stats.rr.toFixed(2)+' · Qty '+round(stats.qty));
     }
    }else if(t==='priceRange'||t==='dateRange'){
     const q=rangeStats(d,this.chart.candles);
