@@ -1,50 +1,241 @@
+import {TOOL_CATALOG,clone,anchor,normalizeAnchor,resolveAnchor,normalizeDrawing,normalizeStyle,normalizeRisk,normalizeLevels,seedPosition,positionStats,shiftDrawing,rangeStats,fibPrices,clipLine} from './drawing-model.js';
 const $=id=>document.getElementById(id);
-const encode=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/>/g,'&gt;');
-const fibLevels=[0,.236,.382,.5,.618,.786,1];
+const enc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const freehand=t=>t==='brush'||t==='highlighter';
+const position=t=>t==='long'||t==='short';
+const one=t=>TOOL_CATALOG[t]?.points===1;
+const n=x=>Number.isFinite(x)?Number(x.toFixed(3)):0;
+const xy=p=>n(p.x)+','+n(p.y);
+const deep=a=>clone(a);
+const round=x=>Number.isFinite(x)?x.toLocaleString('en-US',{maximumFractionDigits:6}):'–';
 export class DrawingLayer{
  constructor(chart,{onChange,onToast,getKey}){
-  this.chart=chart;this.onChange=onChange;this.onToast=onToast;this.getKey=getKey;
-  this.svg=$('drawingOverlay');this.stage=$('chartStage');this.tool='pointer';this.drawings=[];this.undoStack=[];this.redoStack=[];this.preview=null;this.hidden=false;this.magnet=false;this.selected=null;this.install();
-  const resize=new ResizeObserver(()=>this.render());resize.observe(this.stage);this.resizeObserver=resize;
-  if(this.chart.isLW){this.chart.engine.onVisible=()=>this.render()}
-  else{this.chart.engine.onVisible=()=>this.render()}
+  Object.assign(this,{chart,onChange,onToast,getKey,svg:$('drawingOverlay'),stage:$('chartStage'),tool:'pointer',drawings:[],undoStack:[],redoStack:[],preview:null,hidden:false,magnet:false,magnetMode:'off',keepDrawing:false,lockAll:false,selected:null,ready:false,pending:null,gesture:null,templates:{}});
+  try{this.templates=JSON.parse(localStorage.getItem('tw-drawing-templates-v1')||'{}')||{}}catch{}
+  this.install();this.resizeObserver=new ResizeObserver(()=>this.render());this.resizeObserver.observe(this.stage);
+  this.chart.engine.onVisible=()=>this.render();
  }
  install(){
-  this.svg.addEventListener('pointerdown',e=>this.down(e));this.svg.addEventListener('pointermove',e=>this.move(e));this.svg.addEventListener('pointerup',e=>this.up(e));this.svg.addEventListener('pointercancel',()=>{this.preview=null;this.render()});
-  this.svg.addEventListener('click',e=>{const id=e.target.closest('[data-drawing-id]')?.dataset.drawingId;if(id&&this.tool==='pointer'){this.selected=id;this.render();this.onChange?.()}});
-  document.addEventListener('keydown',e=>{if(['TEXTAREA','INPUT'].includes(document.activeElement?.tagName))return;if((e.key==='Delete'||e.key==='Backspace')&&this.selected){this.remove(this.selected)}if(e.key==='Escape'){this.setTool('pointer');this.selected=null;this.preview=null;this.render()}})
+  for(const [event,method] of [['pointerdown','down'],['pointermove','move'],['pointerup','up']])this.svg.addEventListener(event,e=>this[method](e));
+  this.svg.addEventListener('pointercancel',()=>this.cancelGesture());
+  this.svg.addEventListener('dblclick',e=>{const id=e.target.closest('[data-drawing-id]')?.dataset.drawingId;if(id){e.preventDefault();e.stopPropagation();this.onEdit?.(id)}});
+  this.stage.addEventListener('pointerdown',e=>{if(this.tool==='pointer'&&!e.target.closest('[data-drawing-id],#drawingQuickBar'))this.select(null)});
+  document.addEventListener('keydown',e=>{
+   if(['TEXTAREA','INPUT','SELECT'].includes(document.activeElement?.tagName)||document.activeElement?.isContentEditable||!$('modalBackdrop')?.classList.contains('hidden'))return;
+   if((e.key==='Delete'||e.key==='Backspace')&&this.selected){e.preventDefault();this.remove(this.selected)}
+   if(e.key==='Escape'){this.setTool('pointer');this.select(null)}
+  });
+  $('drawingQuickBar')?.addEventListener('click',e=>{
+   const action=e.target.closest('[data-drawing-action]')?.dataset.drawingAction,id=this.selected;
+   if(!action||!id)return;
+   if(action==='edit')this.onEdit?.(id);
+   if(action==='lock')this.toggleFlag(id,'locked');
+   if(action==='hide')this.toggleFlag(id,'hidden');
+   if(action==='duplicate')this.duplicate(id);
+   if(action==='delete')this.remove(id);
+   if(action==='close')this.select(null);
+  });
+  $('drawingHintCancel')?.addEventListener('click',()=>this.setTool('pointer'));
+  this.syncControls();
  }
- setTool(tool){this.tool=tool;this.stage.classList.toggle('drawing-mode',tool!=='pointer');this.svg.style.pointerEvents=tool==='pointer'?'none':'auto';this.svg.style.cursor=tool==='pointer'?'default':'crosshair';document.querySelectorAll('.tool[data-tool]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tool===tool));}
- fromEvent(e){const rect=this.svg.getBoundingClientRect();const x=e.clientX-rect.left,y=e.clientY-rect.top;const logical=this.chart.coordinateToLogical(x),price=this.chart.coordinateToPrice(y);if(logical===null||price===null||!Number.isFinite(logical)||!Number.isFinite(price))return null;
-  if(this.magnet){const idx=Math.max(0,Math.min(this.chart.candles.length-1,Math.round(logical)));const candle=this.chart.candles[idx];if(candle){const points=[candle.high,candle.low,candle.open,candle.close];let near=points[0];for(const p of points)if(Math.abs(this.chart.priceToCoordinate(p)-y)<Math.abs(this.chart.priceToCoordinate(near)-y))near=p;return{logical:idx,price:near}}}
-  return {logical,price};
+ setReady(ready){this.ready=Boolean(ready);if(!ready){this.pending=null;this.preview=null;this.gesture=null;this.selected=null;this.drawings=[];this.undoStack=[];this.redoStack=[];this.setTool('pointer')}this.render()}
+ setTool(tool){
+  if(!TOOL_CATALOG[tool])return;
+  if(tool!=='pointer'&&!this.ready){this.onToast?.('Tunggu market data dimuat.');return}
+  this.cancelGesture();this.pending=null;this.preview=null;this.tool=tool;this.selected=null;
+  this.stage.classList.toggle('drawing-mode',tool!=='pointer');
+  this.svg.style.pointerEvents=tool==='pointer'||tool==='eraser'?'none':'auto';
+  this.svg.style.cursor=tool==='pointer'?'default':tool==='eraser'?'not-allowed':'crosshair';
+  this.syncControls();this.render();this.onSelect?.();window.dispatchEvent(new Event('tw:draw-tool'));
  }
- down(e){if(this.tool==='pointer')return;if(e.button!==0)return;const p=this.fromEvent(e);if(!p)return;e.preventDefault();e.stopPropagation();if(this.tool==='text'){const text=prompt('Teks anotasi chart:','Catatan analisis');if(text?.trim()){this.add({type:'text',a:p,b:p,text:text.slice(0,160)});this.onToast('Catatan ditambahkan')};this.setTool('pointer');return}if(['horizontal','vertical'].includes(this.tool)){this.add({type:this.tool,a:p,b:p});this.setTool('pointer');return}this.start=p;this.preview={type:this.tool,a:p,b:p};this.svg.setPointerCapture(e.pointerId);this.render()}
- move(e){if(!this.preview||this.tool==='pointer')return;const p=this.fromEvent(e);if(!p)return;this.preview.b=p;this.render()}
- up(e){if(!this.preview)return;const p=this.fromEvent(e);if(p)this.preview.b=p;const {a,b}=this.preview;this.add({...this.preview});this.preview=null;this.start=null;try{this.svg.releasePointerCapture(e.pointerId)}catch{}this.setTool('pointer');this.render()}
- add(item){this.undoStack.push(this.drawings.map(x=>({...x})));this.redoStack=[];this.drawings.push({...item,id:crypto?.randomUUID?.()||String(Date.now()+Math.random())});this.changed()}
- remove(id){if(!this.drawings.some(x=>x.id===id))return;this.undoStack.push(this.drawings.map(x=>({...x})));this.drawings=this.drawings.filter(x=>x.id!==id);this.selected=null;this.redoStack=[];this.changed()}
- clear(){if(!this.drawings.length)return;this.undoStack.push(this.drawings.map(x=>({...x})));this.drawings=[];this.redoStack=[];this.selected=null;this.changed()}
- undo(){if(!this.undoStack.length)return;this.redoStack.push(this.drawings.map(x=>({...x})));this.drawings=this.undoStack.pop();this.changed()}
- redo(){if(!this.redoStack.length)return;this.undoStack.push(this.drawings.map(x=>({...x})));this.drawings=this.redoStack.pop();this.changed()}
- load(items){this.drawings=Array.isArray(items)?items.filter(x=>x?.type&&x?.a&&x?.b).slice(0,500):[];this.undoStack=[];this.redoStack=[];this.selected=null;this.changed()}
- changed(){this.render();this.onChange?.()}
- render(){const w=this.stage.clientWidth,h=this.stage.clientHeight;if(w<10||h<10)return;this.svg.setAttribute('viewBox',`0 0 ${w} ${h}`);this.svg.setAttribute('width',w);this.svg.setAttribute('height',h);if(this.hidden){this.svg.innerHTML='';return}
-  const limitX=w-65;const parts=[];
-  parts.push(`<defs><clipPath id="drawClip"><rect x="0" y="0" width="${limitX}" height="${h-24}"/></clipPath></defs><g clip-path="url(#drawClip)">`);
-  for(const d of [...this.drawings,...(this.preview?[this.preview]:[])]){
-   const ax=this.chart.logicalToCoordinate(d.a.logical),bx=this.chart.logicalToCoordinate(d.b.logical),ay=this.chart.priceToCoordinate(d.a.price),by=this.chart.priceToCoordinate(d.b.price);if([ax,bx,ay,by].some(x=>x===null||!Number.isFinite(x)))continue;
-   const active=this.selected===d.id,blue=active?'#90b7ff':'#598eff',id=d.id?`data-drawing-id="${encode(d.id)}"`:'';
-   if(d.type==='trend'||d.type==='ruler'){const color=d.type==='ruler'?'#f5bd66':blue;parts.push(`<g ${id}><line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${color}" stroke-width="${active?2.6:1.7}"/><circle cx="${ax}" cy="${ay}" r="3" fill="${color}"/><circle cx="${bx}" cy="${by}" r="3" fill="${color}"/><line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="transparent" stroke-width="14" pointer-events="stroke"/></g>`);
-    if(d.type==='ruler')parts.push(`<text x="${(ax+bx)/2+8}" y="${(ay+by)/2-8}" fill="#f4d08c" font-size="11">${(100*(d.b.price/d.a.price-1)).toFixed(2)}%</text>`);
-   }else if(d.type==='horizontal'){parts.push(`<g ${id}><line x1="0" x2="${limitX}" y1="${ay}" y2="${ay}" stroke="${blue}" stroke-width="1.4" stroke-dasharray="6 4"/><rect x="0" y="${ay-6}" width="${limitX}" height="12" fill="transparent" pointer-events="all"/></g>`);
-   }else if(d.type==='vertical'){parts.push(`<g ${id}><line x1="${ax}" x2="${ax}" y1="0" y2="${h-24}" stroke="${blue}" stroke-width="1.4" stroke-dasharray="6 4"/><rect x="${ax-6}" y="0" width="12" height="${h-24}" fill="transparent" pointer-events="all"/></g>`);
-   }else if(d.type==='rectangle'){const x=Math.min(ax,bx),y=Math.min(ay,by),ww=Math.abs(bx-ax)||1,hh=Math.abs(by-ay)||1;parts.push(`<g ${id}><rect x="${x}" y="${y}" width="${ww}" height="${hh}" fill="#547df32c" stroke="${blue}" stroke-width="1.5" pointer-events="all"/></g>`);
-   }else if(d.type==='fibo'){const x1=Math.min(ax,bx),x2=Math.max(ax,bx),width=Math.max(30,x2-x1);parts.push(`<g ${id}>`);for(const lv of fibLevels){const yy=ay+(by-ay)*lv;parts.push(`<line x1="${x1}" y1="${yy}" x2="${x1+width}" y2="${yy}" stroke="${lv===.618?'#f5b65a':'#73a2ff'}" stroke-width="1" pointer-events="stroke"/><text x="${x1+3}" y="${yy-3}" fill="#a6b7cf" font-size="10">${lv}</text>`)}parts.push(`<rect x="${x1}" y="${Math.min(ay,by)}" width="${width}" height="${Math.abs(by-ay)}" fill="transparent" pointer-events="all"/></g>`);
-   }else if(d.type==='text'){parts.push(`<text ${id} x="${ax+5}" y="${ay}" fill="#ffcf8b" font-family="Arial,sans-serif" font-size="13" font-weight="600" pointer-events="all">${encode(d.text||'Note')}</text>`);
-   }else if(d.type==='long'||d.type==='short'){const x=Math.min(ax,bx),width=Math.max(22,Math.abs(bx-ax)),entryY=ay,dist=Math.max(10,Math.abs(by-ay)),takeY=d.type==='long'?entryY-dist:entryY+dist,stopY=d.type==='long'?entryY+dist/2:entryY-dist/2;
-    parts.push(`<g ${id}><rect x="${x}" y="${Math.min(entryY,takeY)}" width="${width}" height="${dist}" fill="#09a98031" stroke="#18bc92" stroke-width="1" pointer-events="all"/><rect x="${x}" y="${Math.min(entryY,stopY)}" width="${width}" height="${dist/2}" fill="#ec586535" stroke="#ef5c73" stroke-width="1" pointer-events="all"/><line x1="${x}" x2="${x+width}" y1="${entryY}" y2="${entryY}" stroke="#c2cde0" stroke-dasharray="4 2"/><text x="${x+4}" y="${Math.min(entryY,takeY)+12}" fill="#72e8c6" font-size="10">TP / RR 2:1</text><text x="${x+4}" y="${Math.max(entryY,stopY)-5}" fill="#ffa0ae" font-size="10">SL</text></g>`);
+ syncControls(){
+  document.querySelectorAll('.tool[data-tool],[data-quick-tool],[data-mobile-tool]').forEach(b=>{const active=(b.dataset.tool||b.dataset.quickTool||b.dataset.mobileTool)===this.tool;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))});
+  for(const [id,active] of [['magnetBtn',this.magnet],['keepDrawingBtn',this.keepDrawing],['lockDrawingsBtn',this.lockAll],['hideDrawingsBtn',this.hidden]]){const b=$(id);b?.classList.toggle('active',active);b?.setAttribute('aria-pressed',String(active))}
+  if($('magnetBtn'))$('magnetBtn').title='Magnet: '+this.magnetMode+' (klik untuk mode berikutnya)';
+  const hint=$('drawingHint'),caption=$('drawingHintText');if(hint&&caption){hint.classList.toggle('hidden',this.tool==='pointer');caption.textContent=this.tool==='eraser'?'Ketuk objek untuk menghapus':(TOOL_CATALOG[this.tool]?.label||this.tool)+' · '+(this.pending?'Tentukan titik '+(this.pending.anchors.length+1):one(this.tool)?'Ketuk chart':freehand(this.tool)?'Gambar dengan drag':'Ketuk titik awal atau drag')}
+ }
+ setMagnet(mode){this.magnetMode=['off','weak','strong'].includes(mode)?mode:'off';this.magnet=this.magnetMode!=='off';this.syncControls()}
+ cycleMagnet(){const a=['off','weak','strong'];this.setMagnet(a[(a.indexOf(this.magnetMode)+1)%a.length]);this.onToast?.('Magnet: '+this.magnetMode)}
+ select(id){const next=this.drawings.some(x=>x.id===id)?id:null;if(next===this.selected)return;this.selected=next;this.render();this.onSelect?.()}
+ bounds(){
+  const w=this.stage.clientWidth,h=this.stage.clientHeight;let scale=74,plotH=h-24;
+  try{scale=this.chart.engine.chart.priceScale('right').width()||scale;const pane=this.chart.engine.chart.panes()[0];if(pane?.getHeight)plotH=Math.min(plotH,pane.getHeight())}catch{if(this.chart.engine.mainHeight>0)plotH=Math.min(plotH,this.chart.engine.mainHeight)}
+  return {w,h,right:Math.max(0,w-scale),bottom:Math.max(0,plotH)}
+ }
+ fromEvent(e,{snap=true,clamp=false}={}){
+  if(!this.ready||!this.chart.candles.length)return null;
+  const rect=this.svg.getBoundingClientRect(),bounds=this.bounds();let x=e.clientX-rect.left,y=e.clientY-rect.top;
+  if(!clamp&&(x<0||x>bounds.right||y<0||y>bounds.bottom))return null;
+  x=Math.max(0,Math.min(bounds.right,x));y=Math.max(0,Math.min(bounds.bottom,y));
+  let logical=this.chart.coordinateToLogical(x),price=this.chart.coordinateToPrice(y);
+  if(logical===null||price===null||!Number.isFinite(logical)||!Number.isFinite(price))return null;
+  if(snap&&this.magnet){const i=Math.round(logical),bar=this.chart.candles[i];
+   if(bar){const values=[bar.open,bar.high,bar.low,bar.close].filter(Number.isFinite);let nearest=null,distance=Infinity;for(const v of values){const yy=this.chart.priceToCoordinate(v),d=Math.abs(yy-y);if(Number.isFinite(yy)&&d<distance){nearest=v;distance=d}}
+    if(nearest!==null&&(this.magnetMode==='strong'||distance<=13)){logical=i;price=nearest}
    }
+  }
+  return anchor(this.chart.candles,logical,price);
+ }
+ capture(e){try{this.svg.setPointerCapture(e.pointerId)}catch{}}
+ release(e){try{this.svg.releasePointerCapture(e.pointerId)}catch{}}
+ make(type,points){
+  const a=points[0],b=points[1]||a,c=points[2],item={type,a,b,c,style:normalizeStyle(type,this.templates[type]?.style),text:this.templates[type]?.text||''};
+  if(position(type)){Object.assign(item,seedPosition(type,a,b,this.chart.candles));item.risk=normalizeRisk(this.templates[type]?.risk)}
+  if(['fibo','fibExtension'].includes(type))item.levels=normalizeLevels(this.templates[type]?.levels,type);
+  if(freehand(type)){item.points=points;item.a=points[0];item.b=points.at(-1)}
+  return item;
+ }
+ down(e){
+  if(!this.ready||e.button!==0||this.gesture)return;
+  const hit=e.target.closest('[data-drawing-id]'),id=hit?.dataset.drawingId,handle=e.target.closest('[data-handle]')?.dataset.handle;
+  if(this.tool==='pointer'||this.tool==='eraser'){
+   if(!id)return;e.preventDefault();e.stopPropagation();this.select(id);
+   if(this.tool==='eraser'){if(!this.lockAll&&!this.drawings.find(d=>d.id===id)?.locked)this.remove(id);else this.onToast?.('Objek dikunci.');return}
+   const d=this.drawings.find(x=>x.id===id),p=this.fromEvent(e,{snap:false});if(!d||d.locked||this.lockAll||!p)return;
+   this.gesture={mode:'edit',id,handle,original:deep(d),before:deep(this.drawings),start:p,x:e.clientX,y:e.clientY,moved:false};this.capture(e);return;
+  }
+  const p=this.fromEvent(e);if(!p)return;
+  e.preventDefault();e.stopPropagation();this.capture(e);
+  if(one(this.tool)){
+   const item=this.make(this.tool,[p]);
+   if(this.tool==='text'){const txt=prompt('Teks anotasi chart:',item.text||'Catatan analisis');if(!txt?.trim()){this.release(e);this.finishTool();return}item.text=txt}
+   this.add(item);this.release(e);this.finishTool();return;
+  }
+  this.gesture={mode:'create',first:p,last:p,x:e.clientX,y:e.clientY,moved:false,points:[p]};
+  const previous=this.pending?.anchors||[];this.preview=this.make(this.tool,[...previous,p,p].slice(0,TOOL_CATALOG[this.tool].points));
+  this.render();
+ }
+ move(e){
+  const g=this.gesture;
+  if(!g){
+   if(this.pending&&this.tool!=='pointer'&&!freehand(this.tool)&&e.pointerType==='mouse'){
+    const p=this.fromEvent(e);if(p){this.preview=this.make(this.tool,[...this.pending.anchors,p]);this.render()}
+   }
+   return;
+  }
+  if(Math.hypot(e.clientX-g.x,e.clientY-g.y)>5)g.moved=true;
+  if(!g.moved)return;
+  const p=this.fromEvent(e,{snap:g.mode==='create'||Boolean(g.handle),clamp:true});if(!p)return;
+  e.preventDefault();
+  if(g.mode==='edit'){
+   let d=deep(g.original);
+   if(g.handle&&['a','b','c'].includes(g.handle)){
+    d[g.handle]=p;
+    if(one(d.type)&&g.handle==='a')d.b=p;
+   }else d=shiftDrawing(d,this.chart.candles,p.logical-g.start.logical,p.price-g.start.price);
+   this.drawings=this.drawings.map(x=>x.id===g.id?d:x);
+  }else{
+   g.last=p;
+   if(freehand(this.tool)){const last=g.points.at(-1);if(g.points.length<600&&(Math.abs(last.logical-p.logical)>.08||Math.abs(last.price-p.price)>1e-9))g.points.push(p);this.preview=this.make(this.tool,g.points)}
+   else{const previous=this.pending?.anchors||[];const points=previous.length?[...previous,p]:[g.first,p];this.preview=this.make(this.tool,points)}
+  }
+  this.render();
+ }
+ up(e){
+  const g=this.gesture;if(!g)return;
+  this.release(e);this.gesture=null;
+  if(g.mode==='edit'){
+   if(g.moved){const d=this.drawings.find(x=>x.id===g.id),fixed=normalizeDrawing(d,this.chart.candles);if(!fixed){this.drawings=g.before;this.onToast?.('Koordinat tidak valid: TP dan SL harus berlawanan sisi entry.');this.render();return}this.drawings=this.drawings.map(x=>x.id===g.id?fixed:x);this.remember(g.before);this.changed()}else this.render();return;
+  }
+  const p=this.fromEvent(e,{clamp:true})||g.last;
+  let points;
+  if(freehand(this.tool)){
+   if(!g.moved||g.points.length<2){this.preview=null;this.render();return}points=g.points;
+  }else{
+   const previous=this.pending?.anchors||[];
+   points=previous.length?[...previous,p]:g.moved?[g.first,p]:[g.first];
+   if(points.length<TOOL_CATALOG[this.tool].points){this.pending={anchors:points};this.preview=this.make(this.tool,[...points,p]);this.syncControls();this.render();return}
+  }
+  this.add(this.make(this.tool,points));this.pending=null;this.preview=null;this.finishTool();this.render();
+ }
+ cancelGesture(){
+  if(this.gesture?.mode==='edit')this.drawings=this.gesture.before;
+  this.gesture=null;this.pending=null;this.preview=null;this.render();
+ }
+ finishTool(){if(!this.keepDrawing){const selected=this.selected;this.setTool('pointer');this.select(selected)}else{this.pending=null;this.preview=null;this.syncControls();this.render()}}
+ remember(before=this.drawings){this.undoStack.push(deep(before));if(this.undoStack.length>60)this.undoStack.shift();this.redoStack=[]}
+ add(item){
+  const fixed=normalizeDrawing(item,this.chart.candles);if(!fixed){this.onToast?.('Titik drawing tidak valid.');return null}
+  if(this.drawings.length>=500){this.onToast?.('Maksimal 500 objek per chart.');return null}
+  this.remember();this.drawings.push(fixed);this.selected=fixed.id;this.changed();return fixed.id;
+ }
+ update(id,patch){
+  const old=this.drawings.find(x=>x.id===id);if(!old)return false;
+  const next=normalizeDrawing({...old,...patch,id,type:old.type},this.chart.candles);if(!next)return false;
+  this.remember();this.drawings=this.drawings.map(x=>x.id===id?next:x);this.changed();return true;
+ }
+ toggleFlag(id,key){if(!['locked','hidden'].includes(key))return;const d=this.drawings.find(x=>x.id===id);if(d)this.update(id,{[key]:!d[key]})}
+ duplicate(id){const d=this.drawings.find(x=>x.id===id);if(!d)return;const copy=shiftDrawing(d,this.chart.candles,3,0);delete copy.id;copy.locked=false;copy.hidden=false;return this.add(copy)}
+ saveTemplate(d){this.templates[d.type]={style:normalizeStyle(d.type,d.style),levels:d.levels,risk:d.risk,text:d.text};try{localStorage.setItem('tw-drawing-templates-v1',JSON.stringify(this.templates))}catch{}}
+ remove(id){if(!this.drawings.some(x=>x.id===id))return;this.remember();this.drawings=this.drawings.filter(x=>x.id!==id);if(this.selected===id)this.selected=null;this.changed()}
+ clear(){if(!this.drawings.length)return;this.remember();this.drawings=[];this.selected=null;this.changed()}
+ undo(){if(!this.undoStack.length)return;this.redoStack.push(deep(this.drawings));this.drawings=this.undoStack.pop();this.selected=null;this.changed()}
+ redo(){if(!this.redoStack.length)return;this.undoStack.push(deep(this.drawings));this.drawings=this.redoStack.pop();this.selected=null;this.changed()}
+ load(items){this.ready=this.chart.candles.length>0;this.pending=null;this.preview=null;this.gesture=null;this.drawings=(Array.isArray(items)?items:[]).slice(0,500).map(x=>normalizeDrawing(x,this.chart.candles)).filter(Boolean);this.undoStack=[];this.redoStack=[];this.selected=null;this.changed()}
+ changed(){this.render();this.onChange?.();this.onSelect?.()}
+ point(p){if(!p)return null;const l=resolveAnchor(this.chart.candles,p).logical,x=this.chart.logicalToCoordinate(l),y=this.chart.priceToCoordinate(p.price);return x!==null&&y!==null&&Number.isFinite(x)&&Number.isFinite(y)?{x,y}:null}
+ render(){
+  const {w,h,right,bottom}=this.bounds();if(w<10||h<10)return;
+  this.svg.setAttribute('viewBox','0 0 '+w+' '+h);this.svg.setAttribute('width',w);this.svg.setAttribute('height',h);
+  const current=this.drawings.find(x=>x.id===this.selected),bar=$('drawingQuickBar');if(bar){bar.classList.toggle('hidden',!current||this.hidden||this.tool!=='pointer');$('drawingSelectedName').textContent=current?TOOL_CATALOG[current.type]?.label||current.type:'';bar.querySelector('[data-drawing-action="lock"]')?.classList.toggle('active',!!current?.locked);bar.querySelector('[data-drawing-action="hide"]')?.classList.toggle('active',!!current?.hidden)}
+  if(this.hidden||!this.ready){this.svg.innerHTML='';return}
+  const parts=['<defs><clipPath id="drawClip"><rect x="0" y="0" width="'+right+'" height="'+bottom+'"/></clipPath></defs><g clip-path="url(#drawClip)">'];
+  for(const d of [...this.drawings,...(this.preview?[this.preview]:[])]){
+   if(d.hidden||!d.a||!d.b)continue;
+   const a=this.point(d.a),b=this.point(d.b),c=this.point(d.c);if(!a||!b)continue;
+   const active=d.id&&this.selected===d.id,style=normalizeStyle(d.type,d.style),id=d.id?' data-drawing-id="'+enc(d.id)+'"':'',color=style.color,dash=style.dash==='dashed'?'7 4':style.dash==='dotted'?'2 4':'none';
+   const stroke=' stroke="'+color+'" stroke-width="'+style.width+'" stroke-dasharray="'+dash+'"';
+   const group=['<g'+id+'>'];
+   const line=(aa,bb,extra='',mode='segment')=>{
+    const clipped=clipLine(aa,bb,right,bottom,mode);if(!clipped)return;const [q,r]=clipped,coords=' x1="'+n(q.x)+'" y1="'+n(q.y)+'" x2="'+n(r.x)+'" y2="'+n(r.y)+'"';
+    group.push('<line'+coords+stroke+' '+extra+' pointer-events="stroke"/><line'+coords+' stroke="transparent" stroke-width="18" pointer-events="stroke"/>');
+   };
+   const label=(x,y,text,fill=color)=>group.push('<text x="'+n(x)+'" y="'+n(y)+'" font-size="11" font-family="Arial,sans-serif" fill="'+fill+'" paint-order="stroke" stroke="var(--deep,#090b0e)" stroke-width="2" pointer-events="none">'+enc(text)+'</text>');
+   const rect=(x1,y1,x2,y2,fill=style.fill,opacity=style.opacity,edge=color)=>group.push('<rect x="'+n(Math.min(x1,x2))+'" y="'+n(Math.min(y1,y2))+'" width="'+Math.max(1,n(Math.abs(x2-x1)))+'" height="'+Math.max(1,n(Math.abs(y2-y1)))+'" fill="'+fill+'" fill-opacity="'+opacity+'" stroke="'+edge+'" stroke-width="'+style.width+'" stroke-dasharray="'+dash+'" pointer-events="all"/>');
+   const t=d.type;
+   if(['trend','ray','extended','arrow','ruler'].includes(t)){
+    line(a,b,'',t==='ray'?'ray':t==='extended'?'extended':'segment');
+    if(t==='arrow'){const ang=Math.atan2(b.y-a.y,b.x-a.x),size=11;group.push('<polygon points="'+xy(b)+' '+xy({x:b.x-size*Math.cos(ang-.5),y:b.y-size*Math.sin(ang-.5)})+' '+xy({x:b.x-size*Math.cos(ang+.5),y:b.y-size*Math.sin(ang+.5)})+'" fill="'+color+'"/>')}
+    if(t==='ruler'){const q=rangeStats(d,this.chart.candles);rect(a.x,a.y,b.x,b.y);label(Math.min(a.x,b.x)+5,Math.min(a.y,b.y)-5,round(q.diff)+' ('+round(q.percent)+'%) · '+q.bars+' bars')}
+   }else if(['horizontal','horizontalRay','liquidity','crossline'].includes(t)){
+    line({x:['horizontalRay','liquidity'].includes(t)?a.x:0,y:a.y},{x:right,y:a.y});
+    if(t==='crossline')line({x:a.x,y:0},{x:a.x,y:bottom});
+    if(t==='liquidity')label(Math.min(right-80,a.x+5),a.y-5,d.text||'Liquidity');
+    else label(Math.max(0,right-92),a.y-5,this.chart.formatPrice(d.a.price));
+   }else if(t==='vertical'){line({x:a.x,y:0},{x:a.x,y:bottom})}
+   else if(['rectangle','obZone','fvgZone'].includes(t)){
+    rect(a.x,a.y,style.extend?right:b.x,b.y);if(t!=='rectangle'||d.text)label(Math.max(0,Math.min(a.x,b.x)+5),Math.min(a.y,b.y)+13,d.text||({obZone:'OB',fvgZone:'FVG'}[t]||''));
+   }else if(t==='ellipse'){
+    group.push('<ellipse cx="'+n((a.x+b.x)/2)+'" cy="'+n((a.y+b.y)/2)+'" rx="'+Math.max(1,Math.abs(b.x-a.x)/2)+'" ry="'+Math.max(1,Math.abs(b.y-a.y)/2)+'" fill="'+style.fill+'" fill-opacity="'+style.opacity+'"'+stroke+' pointer-events="all"/>');
+   }else if(t==='triangle'){
+    const end=c||b;group.push('<polygon points="'+[a,b,end].map(xy).join(' ')+'" fill="'+style.fill+'" fill-opacity="'+style.opacity+'"'+stroke+' pointer-events="all"/>');
+   }else if(t==='channel'){
+    const q=c||b,dx=b.x-a.x,offset=q.y-(a.y+(Math.abs(dx)>0.01?(b.y-a.y)*(q.x-a.x)/dx:0));
+    const aa={x:a.x,y:a.y+offset},bb={x:b.x,y:b.y+offset};group.push('<polygon points="'+[a,b,bb,aa].map(xy).join(' ')+'" fill="'+style.fill+'" fill-opacity="'+style.opacity+'" pointer-events="all"/>');line(a,b);line(aa,bb);line({x:a.x,y:a.y+offset/2},{x:b.x,y:b.y+offset/2},'opacity=".45"');
+   }else if(t==='fibo'||t==='fibExtension'){
+    line(a,b,'opacity=".4"');if(c)line(b,c,'opacity=".4"');
+    const low=t==='fibExtension'?(c?.x??b.x):Math.min(a.x,b.x),high=style.extend?right:Math.max(low+36,a.x,b.x,c?.x??0);
+    for(const level of fibPrices(d)){const y=this.chart.priceToCoordinate(level.price);if(y===null||!Number.isFinite(y))continue;line({x:low,y},{x:high,y},level.level===.618?'opacity="1"':'opacity=".75"');label(low+4,y-3,level.level+' ('+this.chart.formatPrice(level.price)+')')}
+   }else if(t==='text'||t==='priceLabel'){
+    const txt=t==='priceLabel'?this.chart.formatPrice(d.a.price):d.text||'Note';group.push('<text x="'+n(a.x+5)+'" y="'+n(a.y-4)+'" fill="'+color+'" font-size="13" font-weight="600" pointer-events="all">'+enc(txt)+'</text>');
+   }else if(freehand(t)){
+    const points=(d.points||[d.a,d.b]).map(p=>this.point(p)).filter(Boolean),coords=points.map(xy).join(' ');
+    group.push('<polyline points="'+coords+'" fill="none" stroke="'+color+'" stroke-width="'+style.width+'" stroke-opacity="'+(t==='highlighter'?Math.max(.08,style.opacity):1)+'" stroke-linecap="round" stroke-linejoin="round" pointer-events="stroke"/><polyline points="'+coords+'" fill="none" stroke="transparent" stroke-width="'+Math.max(style.width,16)+'" pointer-events="stroke"/>');
+   }else if(position(t)){
+    const stats=positionStats(d);if(c&&stats){const start=Math.min(a.x,b.x),end=Math.max(a.x+12,b.x,a.x);
+     rect(start,a.y,end,b.y,'#089981',.23,'#089981');rect(start,a.y,end,c.y,'#f23645',.23,'#f23645');line({x:start,y:a.y},{x:end,y:a.y});
+     label(start+4,Math.min(a.y,b.y)+13,'TP '+this.chart.formatPrice(d.b.price)+' · RR '+stats.rr.toFixed(2),'#58d5b8');label(start+4,Math.max(a.y,c.y)-4,'SL '+this.chart.formatPrice(d.c.price)+' · Qty '+round(stats.qty),'#ff8d9b');
+    }
+   }else if(t==='priceRange'||t==='dateRange'){
+    const q=rangeStats(d,this.chart.candles);
+    if(t==='priceRange'){rect(a.x,a.y,Math.abs(b.x-a.x)<24?a.x+24:b.x,b.y);label(a.x+4,Math.min(a.y,b.y)-4,round(q.diff)+' ('+round(q.percent)+'%)')}
+    else{rect(a.x,0,b.x,bottom);label(Math.min(a.x,b.x)+4,20,q.bars+' bars · '+round(q.seconds/60)+' min')}
+   }
+   if(active&&!this.lockAll&&!d.locked&&!freehand(t)&&this.tool==='pointer'){
+    const handles=one(t)?[['a',a]]:[['a',a],['b',b],...(c?[['c',c]]:[])];
+    for(const [key,q] of handles){group.push('<circle cx="'+n(q.x)+'" cy="'+n(q.y)+'" r="5" fill="#11141b" stroke="#b8cdff" stroke-width="2" data-handle="'+key+'" pointer-events="all"/><circle cx="'+n(q.x)+'" cy="'+n(q.y)+'" r="12" fill="transparent" data-handle="'+key+'" pointer-events="all"/>')}
+   }
+   group.push('</g>');parts.push(...group);
   }
   parts.push('</g>');this.svg.innerHTML=parts.join('');
  }
