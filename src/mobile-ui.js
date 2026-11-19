@@ -7,16 +7,21 @@ const esc=x=>String(x??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 const click=id=>$(id)?.click();
 const rowHeight=24;
 function wheel(root,{items,selected,label,choose,open}){
- let signature='',values=[],current='',timer;
+ let signature='',values=[],current='',timer,armed=false;
+ const visible=()=>root.getClientRects().length>0&&root.clientHeight>0&&$('app').dataset.mobilePage==='chart';
+ function cancel(){clearTimeout(timer);armed=false}
  function settle(){
-  clearTimeout(timer);
+  if(!armed||!visible()){cancel();return}
+  cancel();
   const index=Math.max(0,Math.min(values.length-1,Math.round(root.scrollTop/rowHeight)));
   const value=values[index]; if(value&&value!==current)choose(value);
  }
- root.addEventListener('scroll',()=>{clearTimeout(timer);timer=setTimeout(settle,160)},{passive:true});
+ root.addEventListener('pointerdown',()=>{if(visible())armed=true},{passive:true});
+ root.addEventListener('wheel',()=>{if(visible())armed=true},{passive:true});
+ root.addEventListener('scroll',()=>{if(!armed||!visible())return;clearTimeout(timer);timer=setTimeout(settle,160)},{passive:true});
  root.addEventListener('click',event=>{
   const button=event.target.closest('[data-wheel-value]');if(!button)return;
-  clearTimeout(timer);const value=button.dataset.wheelValue;
+  cancel();const value=button.dataset.wheelValue;
   if(value===current)open();else choose(value);
  });
  root.addEventListener('keydown',e=>{
@@ -24,11 +29,12 @@ function wheel(root,{items,selected,label,choose,open}){
   if(e.key==='Enter'||e.key===' '){e.preventDefault();open();return}
   if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();const i=values.indexOf(current)+(e.key==='ArrowUp'?-1:1);if(values[i])choose(values[i])}
  });
- return {render(){
+ return {cancel,render(force=false){
+  if(!visible()){cancel();return}
   const next=items(),active=selected(),names=next.map(label);
   const key=JSON.stringify([next,active,names]);
-  if(key===signature)return;
-  signature=key; values=next;current=active;clearTimeout(timer);
+  if(key===signature&&!force)return;
+  signature=key; values=next;current=active;cancel();
   root.innerHTML=values.map((v,i)=>'<button type="button" role="option" tabindex="-1" data-wheel-value="'+esc(v)+'" aria-selected="'+(v===current)+'" class="'+(v===current?'selected':'')+'" title="'+esc(names[i])+'">'+esc(names[i])+'</button>').join('');
   root.scrollTop=Math.max(0,values.indexOf(current))*rowHeight;
  }};
@@ -105,13 +111,13 @@ export function mountMobileUI({state,chart,ui,drawingLayer,marketInfo,updateSymb
  function nav(name){document.querySelectorAll('[data-mobile-nav]').forEach(b=>{const active=b.dataset.mobileNav===name;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')})}
  function changePage(name,save=true){
   const next=shellRoute(name);if(page==='explore'&&name!=='explore'){exploreSeq++;exploreController?.abort();clearTimeout(exploreTimer)}
-  page=next.page;$('app').dataset.mobilePage=page;
+  pairWheel?.cancel();tfWheel?.cancel();page=next.page;$('app').dataset.mobilePage=page;
   $('mobileExplorePage').classList.toggle('hidden',page!=='explore');$('mobileMenuPage').classList.toggle('hidden',page!=='menu');
   $('app').classList.remove('mobile-focus');$('mobileChartToolbar').querySelector('[data-mobile-action="focus"]')?.setAttribute('aria-pressed','false');
   $('bottomPanel').classList.add('collapsed');
   if(next.sidebar){setRight(next.sidebar,true);$('rightTitle').textContent=next.sidebar==='watchlist'?'Daftar Pantau':next.sidebar==='objects'?'Object tree':'Alert';updateWatchCount()}
   else{$('rightbar').classList.remove('expanded');$('rightbar').classList.add('shrunk');if(save){ui.setLayout('sidebarCollapsed',true);ui.setLayout('panelCollapsed',true)}}
-  nav(next.tab);renderToolStrip();refreshMenu();if(page==='explore')void loadExplore();if(page==='chart'){requestAnimationFrame(()=>{chart.resize();pairWheel.render();tfWheel.render()})}
+  nav(next.tab);renderToolStrip();refreshMenu();if(page==='explore')void loadExplore();if(page==='chart'){requestAnimationFrame(()=>{chart.resize();pairWheel.render(true);tfWheel.render(true)})}
  }
  function showChart(save=true){changePage('chart',save)}
  function showSidebar(name){changePage(name)}
