@@ -72,7 +72,8 @@ export function positionStats(d){
  const direction=d.type==='long'?1:-1,reward=(d.b.price-d.a.price)*direction,risk=(d.a.price-d.c.price)*direction;
  if(!(reward>0&&risk>0))return null;
  const cfg=normalizeRisk(d.risk),budget=cfg.balance*cfg.percent/100;
- return {risk,reward,rr:reward/risk,budget,qty:budget/(risk*cfg.contract),targetPnL:budget*reward/risk};
+ const targetPnL=budget*reward/risk,stopPnL=-budget,denom=Math.abs(d.a.price);
+ return {risk,reward,rr:reward/risk,budget,qty:budget/(risk*cfg.contract),targetPnL,stopPnL,rewardPercent:denom?reward/denom*100:null,riskPercent:denom?risk/denom*100:null,targetBalance:cfg.balance+targetPnL,stopBalance:cfg.balance+stopPnL};
 }
 export function normalizeDrawing(d,candles=[]){
  if(!d||!TOOL_IDS.includes(d.type))return null;
