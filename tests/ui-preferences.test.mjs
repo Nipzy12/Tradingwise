@@ -6,13 +6,14 @@ import {
  orderWatchlist,readUiPreferences,writeUiPreferences
 } from '../src/ui-preferences.js';
 
-test('defaults provide functional pinned symbol, timeframe, tool and indicator collections',()=>{
+test('new workspace starts with zero drawing favorites before explicit pinning',()=>{
  const p=normalizeUiPreferences();
  assert.equal(p.settings.grid,true);
  assert.equal(p.panelCollapsed,true);
  assert.ok(hasFavorite(p,'symbols','BINANCE:BTCUSDT'));
  assert.ok(hasFavorite(p,'timeframes','1h'));
- assert.ok(hasFavorite(p,'tools','trend'));
+ assert.deepEqual(p.favorites.tools,[]);
+ const pinned=toggleFavorite(p,'tools','trend');assert.ok(hasFavorite(pinned,'tools','trend'));assert.deepEqual(toggleFavorite(pinned,'tools','trend').favorites.tools,[]);
  assert.ok(hasFavorite(p,'indicators','ema9'));
  assert.equal(p.favorites.timeframes.every(x=>TIMEFRAMES.includes(x)),true);
 });
