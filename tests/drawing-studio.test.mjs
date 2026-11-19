@@ -86,7 +86,7 @@ test('every implemented drawing can be placed, selected, duplicated, undone and 
   try{
    const count=TOOL_CATALOG[type].points;
    if(type==='brush'||type==='highlighter'){const a=event(1,100),b=event(2,104),c=event(3,101);l.down(a);l.move(b);l.move(c);l.up(c)}
-   else for(let i=0;i<count;i++){const e=event(i+1,100+(i%2?7:-2)+i);l.down(e);l.up(e)}
+   else {for(let i=0;i<count;i++){const e=event(i+1,100+(i%2?7:-2)+i);l.down(e);l.up(e)}if(type==='path'||type==='polyline')l.finishPath();}
    assert.equal(l.drawings.length,1,type+' created');const id=l.drawings[0].id;
    assert.equal(l.selected,id,type+' selected');assert.equal(l.pending,null,type+' placement finished');
    const copy=l.duplicate(id);assert.ok(copy&&copy!==id,type+' duplicate');assert.equal(l.drawings.length,2);
@@ -115,4 +115,29 @@ test('all supported drawing types produce chart geometry, not merely an object r
    assert.doesNotMatch(markup,/NaN|Infinity/,type+' finite geometry');
   }
  }finally{if(saved===undefined)delete globalThis.document;else globalThis.document=saved}
+});
+
+test('path and polyline accept arbitrary anchor counts, finish explicitly, and retain every edited vertex',()=>{
+ for(const type of ['path','polyline']){
+  const l=layer();l.tool=type;
+  for(let i=1;i<=9;i++){const e=event(i,100+i);l.down(e);l.up(e)}
+  assert.equal(l.drawings.length,0,type+' remains in placement until finished');
+  assert.equal(l.pending.anchors.length,9);
+  assert.equal(l.finishPath(type==='polyline'),true);
+  const d=l.drawings[0];assert.equal(d.points.length,9);assert.equal(d.closed,type==='polyline');
+  assert.equal(d.b.price,109);
+  const shifted=shiftDrawing(d,candles,1,2);assert.equal(shifted.points[8].price,111);
+  const legacy=normalizeDrawing({type,a:p(1,100),b:p(2,101),c:p(3,102),d:p(4,103)},candles);
+  assert.equal(legacy.points.length,4);
+ }
+});
+test('Fibonacci reverse changes level direction without moving chart anchors; old objects preserve orientation',()=>{
+ const normal=normalizeDrawing({type:'fibo',a:p(1,100),b:p(5,200),levels:[0,.5,1]},candles);
+ const reverse=normalizeDrawing({...normal,reverse:true,style:{...normal.style,extendLeft:true}},candles);
+ assert.deepEqual(fibPrices(normal).map(x=>x.price),[100,150,200]);
+ assert.deepEqual(fibPrices(reverse).map(x=>x.price),[200,150,100]);
+ assert.equal(reverse.style.extendLeft,true);
+ assert.equal(reverse.a.price,100);
+ const ext=normalizeDrawing({type:'fibExtension',a:p(1,100),b:p(5,200),c:p(6,150),levels:[0,1],reverse:true},candles);
+ assert.deepEqual(fibPrices(ext).map(x=>x.price),[150,50]);
 });
