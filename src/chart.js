@@ -1,5 +1,6 @@
 import {displayNum} from './market.js';
 import {CHART_TYPES,displayCandles,toSeriesData} from './chart-display.js';
+import {initialVisibleBars} from './mobile-shell-model.js';
 const $=id=>document.getElementById(id);
 const themes={dark:{background:'#090b0e',grid:'#1c2026',minor:'#171a20',text:'#959ba7',up:'#089981',down:'#f23645',line:'#5580f6',cursor:'#8d9cbd'},light:{background:'#ffffff',grid:'#eff2f6',minor:'#f4f6f9',text:'#7b8698',up:'#079d81',down:'#e75267',line:'#416def',cursor:'#a0aabc'}};
 export class ChartEngine{
@@ -36,7 +37,7 @@ class LWChart{
   this.chart.subscribeCrosshairMove(p=>{if(!p?.time){this.outer.onMove?.(null);return}const bar=this.outer.candles.find(c=>c.time===p.time);this.outer.onMove?.(bar||null)});
   this.chart.timeScale().subscribeVisibleLogicalRangeChange(()=>this.onVisible?.());
  }
- setCandles(candles,fit){const d=toSeriesData(candles,this.outer.type);this.main.setData(d);if(fit)this.showLast(140);}
+ setCandles(candles,fit){const d=toSeriesData(candles,this.outer.type);this.main.setData(d);if(fit)this.fit();}
  setLines(lines){
   const L=window.LightweightCharts;
   for(const s of this.series){try{this.chart.removeSeries(s)}catch{}}
@@ -76,7 +77,7 @@ class LWChart{
  logicalToCoordinate(i){return this.chart.timeScale().logicalToCoordinate(i)}
  coordinateToPrice(y){return this.main.coordinateToPrice(y)}
  priceToCoordinate(p){return this.main.priceToCoordinate(p)}
- fit(){this.showLast(140)}
+ fit(){this.showLast(initialVisibleBars(this.stage.clientWidth,window.matchMedia('(max-width:760px)').matches))}
  showLast(count){if(!this.outer.candles.length)return;const n=this.outer.candles.length;this.chart.timeScale().setVisibleLogicalRange({from:Math.max(-5,n-count),to:n+5});}
  resize(){}screenshot(){return this.chart.takeScreenshot().toDataURL('image/png')}
  destroy(){this.chart.remove()}

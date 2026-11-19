@@ -169,7 +169,7 @@ export function mountMobileUI({state,chart,ui,drawingLayer,marketInfo,updateSymb
   $('mobileFavorite').onclick=()=>ui.toggleFavorite('symbols',state.symbol);
   $('mobileCurrency').onclick=currencyModal;
   $('mobileLegendToggle').onclick=()=>{const open=$('chartWindow').classList.toggle('mobile-info-open');$('mobileLegendToggle').setAttribute('aria-expanded',String(open))};
-  $('mobileAuto').onclick=()=>{chart.autoScale();chart.fit()};
+  $('mobileAuto').onclick=()=>{chart.autoScale();$('mobileAuto').setAttribute('aria-pressed','true')};
   $('mobileLog').onclick=()=>{const current=prefs().settings.priceScale;ui.setChartPreference('priceScale',current==='logarithmic'?'normal':'logarithmic')};
   $('mobileActions').addEventListener('click',e=>{const b=e.target.closest('[data-mobile-action]');if(!b)return;const id=b.dataset.mobileAction;if(id==='drawing')drawings();else if(id==='analysis')analysis();else if(id==='more')more();else if(id==='focus'){const active=$('app').classList.toggle('mobile-focus');b.setAttribute('aria-pressed',String(active));chart.resize()}else click(id)});
   document.querySelector('.mobile-nav').addEventListener('click',e=>{const b=e.target.closest('[data-mobile-nav]');if(b)changePage(b.dataset.mobileNav)});
