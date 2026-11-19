@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="./src/mobile.css" />
   <link rel="stylesheet" href="./src/drawing-studio.css" />
   <link rel="stylesheet" href="./src/mobile-app.css" />
+  <link rel="stylesheet" href="./src/drawing-gallery.css" />
   <script>
     window.lwcReady = new Promise(resolve => {
       const script = document.createElement('script');
@@ -31,6 +32,47 @@
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4M12 15v2"/></symbol>
     <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 5V4H4v12h1"/></symbol>
     <symbol id="i-keep" viewBox="0 0 24 24"><path d="m4 17 12-12 3 3-12 12H4v-3Zm10-10 3 3M4 8h6M7 5v6"/></symbol>
+    <symbol id="i-d-info" viewBox="0 0 24 24"><path d="M3 20 20 3"/><rect x="13" y="13" width="8" height="6" rx="1"/></symbol>
+    <symbol id="i-d-angle" viewBox="0 0 24 24"><path d="M3 20 20 3M3 20h18M9 14a8 8 0 0 1 4 6"/></symbol>
+    <symbol id="i-d-regression" viewBox="0 0 24 24"><path d="m3 12 18-9v9L3 21zM3 16 21 7"/></symbol>
+    <symbol id="i-d-channel" viewBox="0 0 24 24"><path d="m3 14 14-11M7 22 21 11"/><circle cx="7" cy="22" r="1.5"/></symbol>
+    <symbol id="i-d-disjoint" viewBox="0 0 24 24"><path d="m3 6 18 9M3 20 21 5"/></symbol>
+    <symbol id="i-d-pitchfork" viewBox="0 0 24 24"><path d="m3 21 18-18M6 8l10 10M10 12 20 2M16 18l6-6"/></symbol>
+    <symbol id="i-d-fibchannel" viewBox="0 0 24 24"><path d="m3 20 18-10M3 14 18 5M3 8l8-5"/></symbol>
+    <symbol id="i-d-time" viewBox="0 0 24 24"><path d="M4 3v18M8 3v18M13 3v18M21 3v18"/></symbol>
+    <symbol id="i-d-fan" viewBox="0 0 24 24"><path d="M3 21 21 3M3 21 21 10M3 21 21 17M3 21 10 3"/></symbol>
+    <symbol id="i-d-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></symbol>
+    <symbol id="i-d-gann" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18"/><path d="M3 3l18 18M3 21 21 3M3 9h18M3 15h18M9 3v18M15 3v18"/></symbol>
+    <symbol id="i-d-pattern" viewBox="0 0 24 24"><path d="M3 20 7 4l7 12 7-12"/><circle cx="3" cy="20" r="1.5"/><circle cx="7" cy="4" r="1.5"/><circle cx="14" cy="16" r="1.5"/><circle cx="21" cy="4" r="1.5"/></symbol>
+    <symbol id="i-d-wave" viewBox="0 0 24 24"><path d="m3 19 5-9 5 5 8-11"/><circle cx="8" cy="10" r="1.5"/><circle cx="13" cy="15" r="1.5"/></symbol>
+    <symbol id="i-d-sine" viewBox="0 0 24 24"><path d="M2 12C6 0 8 0 12 12S18 24 22 12"/></symbol>
+    <symbol id="i-d-projection" viewBox="0 0 24 24"><path d="M4 4v15m5-10v10m5-15v10m5 0v8M17 10l2 4 3-4"/></symbol>
+    <symbol id="i-d-sector" viewBox="0 0 24 24"><path d="M3 21V3a18 18 0 0 1 18 18Z"/></symbol>
+    <symbol id="i-d-vwap" viewBox="0 0 24 24"><path d="m3 17 18-9M6 4v16M12 3v18M18 3v12"/></symbol>
+    <symbol id="i-d-up" viewBox="0 0 24 24"><path d="m3 11 9-9 9 9h-5v10H8V11z"/></symbol>
+    <symbol id="i-d-down" viewBox="0 0 24 24"><path d="m3 13 9 9 9-9h-5V3H8v10z"/></symbol>
+    <symbol id="i-d-rotated" viewBox="0 0 24 24"><path d="m3 14 11-11 7 7-11 11z"/></symbol>
+    <symbol id="i-d-path" viewBox="0 0 24 24"><path d="m3 19 6-10 5 5 7-10"/></symbol>
+    <symbol id="i-d-arc" viewBox="0 0 24 24"><path d="M3 19Q3 3 21 3"/></symbol>
+    <symbol id="i-d-curve" viewBox="0 0 24 24"><path d="M3 21C3 3 15 19 21 3"/></symbol>
+    <symbol id="i-d-note" viewBox="0 0 24 24"><path d="M3 3h18v15H8l-5 4zM7 8h10M7 12h8"/></symbol>
+    <symbol id="i-d-pin" viewBox="0 0 24 24"><path d="M12 22S3 12 3 9a9 9 0 0 1 18 0c0 3-9 13-9 13Z"/><circle cx="12" cy="9" r="3"/></symbol>
+    <symbol id="i-d-flag" viewBox="0 0 24 24"><path d="M4 22V3h16l-4 5 4 5H4"/></symbol>
+    <symbol id="i-d-idea" viewBox="0 0 24 24"><path d="M8 17c0-4-4-4-4-9a8 8 0 0 1 16 0c0 5-4 5-4 9M8 18h8M10 22h4"/></symbol>
+    <symbol id="i-d-emoji" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14q4 5 8 0M8 9h.1M16 9h.1"/></symbol>
+    <symbol id="i-d-sticker" viewBox="0 0 24 24"><path d="M3 3h18v12l-6 6H3zM15 21v-6h6M8 13q4 4 8 0M8 8h.1M16 8h.1"/></symbol>
+    <symbol id="i-d-heart" viewBox="0 0 24 24"><path d="M12 21 4 13C-3 5 7 0 12 7c5-7 15-2 8 6z"/></symbol>
+    <symbol id="i-d-zoomplus" viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6M6 10h8M10 6v8"/></symbol>
+    <symbol id="i-d-zoomminus" viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6M6 10h8"/></symbol>
+    <symbol id="i-d-erase" viewBox="0 0 24 24"><path d="m3 15 12-12 6 6-12 12H3zM9 9l6 6"/></symbol>
+    <symbol id="i-d-ray" viewBox="0 0 24 24"><path d="m3 20 18-18"/><circle cx="3" cy="20" r="2"/></symbol>
+    <symbol id="i-d-hRay" viewBox="0 0 24 24"><path d="M7 12h15"/><circle cx="5" cy="12" r="2"/></symbol>
+    <symbol id="i-d-cross" viewBox="0 0 24 24"><path d="M2 12h20M12 2v20"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-d-brush" viewBox="0 0 24 24"><path d="m5 15 12-12 4 4L9 19zM3 21q3-6 6-2"/></symbol>
+    <symbol id="i-d-ellipse" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="7"/></symbol>
+    <symbol id="i-d-triangle" viewBox="0 0 24 24"><path d="m3 21 6-18 12 18z"/></symbol>
+    <symbol id="i-d-long" viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 20h18M9 15V8l-3 3m3-3 3 3"/></symbol>
+    <symbol id="i-d-short" viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 20h18M9 8v7l-3-3m3 3 3-3"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>

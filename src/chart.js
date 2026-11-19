@@ -23,6 +23,7 @@ export class ChartEngine{
  coordinateToPrice(y){return this.engine.coordinateToPrice(y)}
  priceToCoordinate(p){return this.engine.priceToCoordinate(p)}
  fit(){this.engine.fit()}
+ zoomBy(factor){this.engine.zoomBy?.(factor)}
  showLast(count){this.engine.showLast(count)}
  resize(){this.engine.resize()}
  screenshot(){return this.engine.screenshot()}
@@ -77,6 +78,7 @@ class LWChart{
  logicalToCoordinate(i){return this.chart.timeScale().logicalToCoordinate(i)}
  coordinateToPrice(y){return this.main.coordinateToPrice(y)}
  priceToCoordinate(p){return this.main.priceToCoordinate(p)}
+ zoomBy(factor){const scale=this.chart.timeScale(),r=scale.getVisibleLogicalRange();if(!r)return;const span=Math.max(8,Math.min(1200,(r.to-r.from)*factor));scale.setVisibleLogicalRange({from:r.to-span,to:r.to})}
  fit(){this.showLast(initialVisibleBars(this.stage.clientWidth,window.matchMedia('(max-width:760px)').matches))}
  showLast(count){if(!this.outer.candles.length)return;const n=this.outer.candles.length;this.chart.timeScale().setVisibleLogicalRange({from:Math.max(-5,n-count),to:n+5});}
  resize(){}screenshot(){return this.chart.takeScreenshot().toDataURL('image/png')}
@@ -103,6 +105,7 @@ class CanvasChart{
  setPriceDisplay(){this.render()}
  autoScale(){this.render()}
  fit(){const n=this.outer.candles.length;const plotWidth=Math.max(50,this.w-this.marginRight-this.marginLeft);this.step=Math.max(3,Math.min(13,plotWidth/100));this.first=n-plotWidth/this.step+4;this.render()}
+ zoomBy(factor){const width=Math.max(50,this.w-this.marginRight-this.marginLeft),edge=this.first+width/this.step;this.step=Math.max(3,Math.min(38,this.step/factor));this.first=edge-width/this.step;this.render()}
  showLast(count){const width=this.w-this.marginRight-this.marginLeft;this.step=Math.max(3,Math.min(30,width/count));this.first=this.outer.candles.length-count;this.render()}
  coordinateToLogical(x){return this.first+(x-this.marginLeft)/this.step-.5}
  logicalToCoordinate(i){return this.marginLeft+(i-this.first)*this.step+this.step*.5}

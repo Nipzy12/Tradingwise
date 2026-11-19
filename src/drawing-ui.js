@@ -1,4 +1,4 @@
-import {TOOL_CATALOG,clone,normalizeStyle,normalizeDrawing,normalizeRisk,normalizeLevels,positionStats} from './drawing-model.js';
+import {TOOL_CATALOG,ANCHOR_KEYS,clone,normalizeStyle,normalizeDrawing,normalizeRisk,normalizeLevels,positionStats} from './drawing-model.js';
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const isPosition=t=>t==='long'||t==='short';
 const isBrush=t=>t==='brush'||t==='highlighter';
@@ -9,8 +9,8 @@ export function openDrawingProperties(layer,id,{openModal,closeModal,toast}){
  const d=clone(live),s=normalizeStyle(d.type,d.style),risk=normalizeRisk(d.risk),t=d.type;
  const field=(title,key,value,extra='')=>'<label><span>'+title+'</span><input data-setting="'+key+'" value="'+esc(value)+'" '+extra+'></label>';
  const checkbox=(title,key,value)=>'<label><span>'+title+'</span><input data-setting="'+key+'" type="checkbox" '+(value?'checked':'')+'></label>';
- const points=isBrush(t)?'<p class="settings-note">Brush bisa digeser sebagai satu objek.</p>':['a','b','c'].filter(k=>d[k]&&(TOOL_CATALOG[t].points!==1||k==='a')).map(k=>{
-   const name=isPosition(t)?({a:'Entry',b:'Take profit',c:'Stop loss'})[k]:'Titik '+({a:'1',b:'2',c:'3'})[k];
+ const points=isBrush(t)?'<p class="settings-note">Brush bisa digeser sebagai satu objek.</p>':ANCHOR_KEYS.filter(k=>d[k]&&(TOOL_CATALOG[t].points!==1||k==='a')).map(k=>{
+   const name=isPosition(t)?({a:'Entry',b:'Take profit',c:'Stop loss'})[k]:'Titik '+(ANCHOR_KEYS.indexOf(k)+1);
    return '<div class="drawing-coordinate"><strong>'+name+'</strong>'+field('Harga asli','price-'+k,d[k].price,'type="number" step="any" required')+field('Waktu (UTC)','time-'+k,tf(d[k].time),'type="datetime-local" step="1" required')+'</div>';
  }).join('');
  const fib=['fibo','fibExtension'].includes(t)?'<div class="drawing-form-section"><h4>Fibonacci</h4>'+field('Level (pisahkan koma)','levels',normalizeLevels(d.levels,t).join(', '))+'</div>':'';
@@ -25,7 +25,7 @@ export function openDrawingProperties(layer,id,{openModal,closeModal,toast}){
    if(!form.checkValidity())throw Error('Isian pengaturan belum valid');
    const result=clone(d);result.style=normalizeStyle(t,{color:val('color'),fill:val('fill'),width:Number(val('width')),opacity:Number(val('opacity')),dash:val('dash'),extend:checked('extend')});
    result.text=val('text')||'';result.locked=checked('locked');result.hidden=checked('hidden');
-   for(const k of ['a','b','c'])if(el('price-'+k)){
+   for(const k of ANCHOR_KEYS)if(el('price-'+k)){
     const price=Number(val('price-'+k)),time=val('time-'+k)===tf(d[k].time)?d[k].time:Date.parse(val('time-'+k)+'Z')/1000;
     if(!Number.isFinite(price)||!Number.isFinite(time))throw Error('Koordinat harga/waktu tidak valid');
     result[k]={...result[k],price,time};

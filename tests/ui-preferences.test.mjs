@@ -75,3 +75,5 @@ test('watchlist sorts manual/favorites/symbol/change without mutating source ord
  assert.deepEqual(orderWatchlist(a,'change',[],{'BIQUOTE:XAUUSD':-2,'BINANCE:BTCUSDT':4,'BINANCE:ETHUSDT':-1}),['BINANCE:BTCUSDT','BINANCE:ETHUSDT','BIQUOTE:XAUUSD']);
  assert.deepEqual(a,before);
 });
+
+test('legacy seeded drawing favorites reset once, custom favorites and strip persist',()=>{const m=new Map(),storage={getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v)};m.set(UI_PREF_KEY,JSON.stringify({favorites:{tools:['trend','horizontal','rectangle']}}));assert.deepEqual(readUiPreferences(storage).favorites.tools,[]);m.set(UI_PREF_KEY,JSON.stringify({favorites:{tools:['trend']}}));assert.deepEqual(readUiPreferences(storage).favorites.tools,['trend']);const pref=readUiPreferences(storage);pref.showDrawingFavorites=true;writeUiPreferences(storage,pref);assert.equal(readUiPreferences(storage).showDrawingFavorites,true);assert.deepEqual(readUiPreferences(storage).favorites.tools,['trend']);});

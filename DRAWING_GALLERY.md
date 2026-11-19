@@ -1,0 +1,5 @@
+# Drawing gallery
+
+Mobile drawing sheet inspired by the supplied Android screenshots: full-height Gambar sheet, horizontally scrollable tabs, searchable three-column tiles, long-press or desktop context-menu pin/unpin, filled star only for favorites, and a persistent chart favorites toggle. New installs start with no drawing favorites. The legacy exact default trio is cleared once when no version marker exists; other saved favorites remain. Exact old trio cannot be distinguished from an intentional selection.
+
+New tools use the existing UTC/price anchors, styling, edit handles and undo history. Includes manual wave/pattern annotations (not automatic pattern recognition), fixed-anchor paths, chart-view-angle/fan/circle graphics (scale dependent), regression ±2 standard deviations, anchored VWAP based on available provider volume, and text-based visual markers. Greyed-out tools marked Belum tersedia are not implemented. No proprietary TradingView code, social publishing, actual image upload, or real tick-based volume profiles. Chart data providers are unchanged. Desktop retains its workspace layout and uses the shared gallery.

@@ -47,7 +47,9 @@ try{
  await page.waitForFunction(()=>document.querySelector('#chartLoader').classList.contains('hidden'));
  await tap('[data-mobile-action=analysis]');await visible('#analysisHub');await snap('03-analysis-hub');
  await tap('[data-hub-action=toolstrip]');await visible('#mobileToolFavorites');
- await tap('[data-mobile-tool=all]');await visible('#drawingToolSearch');await snap('04-drawing-studio');
+ await tap('[data-mobile-tool=all]');await visible('#drawingToolSearch');assert.equal(await page.locator('.drawing-gallery-star').count(),0);await tap('[data-draw-tab="Peralatan Tren"]');await visible('[data-draw-pick=horizontal]');await snap('04-drawing-studio');
+ const hold=async selector=>{const box=await page.locator(selector).first().boundingBox();const session=await page.context().newCDPSession(page);const x=box.x+box.width/2,y=box.y+box.height/2;await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});await page.waitForTimeout(650);await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await session.detach()};
+ await hold('[data-draw-pick=horizontal]');await visible('#drawingGalleryToggle');await tap('#drawingGalleryToggle');assert.equal(await page.locator('.drawing-gallery-star').count(),1);await tap('[data-draw-tab="Favorit"]');await visible('[data-draw-pick=horizontal]');await snap('04b-drawing-favorites');await hold('[data-draw-pick=horizontal]');await visible('#drawingGalleryToggle');await tap('#drawingGalleryToggle');assert.equal(await page.locator('.drawing-gallery-star').count(),0);
  await page.locator('#drawingToolSearch').fill('Horizontal line');await page.locator('[data-draw-pick=horizontal]').first().tap();
  await visible('#drawingHint');const plot=await page.locator('#chartStage').boundingBox();
  await page.touchscreen.tap(plot.x+Math.floor(plot.width*.4),plot.y+Math.floor(plot.height*.45));
