@@ -10,11 +10,13 @@ export const TOOL_GROUPS = [
  ["Fibonacci & Gann lanjutan",[["fibChannel","Fib channel","i-fibo",3],["fibTime","Fib time zone","i-fibo",2],["fibFan","Fib speed resistance fan","i-fibo",2],["fibTrendTime","Trend-based Fib time","i-fibo",3],["fibCircle","Fib circles","i-fibo",2],["fibArc","Fib arcs","i-fibo",2],["fibWedge","Fib wedge","i-fibo",3],["gannBox","Gann box (normalized grid)","i-grid",2],["gannFan","Gann fan (anchor-relative)","i-fibo",2]]],
  ["Motif manual",[["xabcd","XABCD pattern","i-trend",5],["cypher","Cypher pattern","i-trend",5],["headShoulders","Head and shoulders","i-trend",7],["abcd","ABCD pattern","i-trend",4],["trianglePattern","Triangle pattern","i-trend",3],["threeDrives","Three drives","i-trend",6],["elliottImpulse","Elliott impulse wave","i-trend",6],["elliottCorrection","Elliott corrective wave","i-trend",4],["elliottTriangle","Elliott triangle wave","i-trend",6],["elliottDouble","Elliott double combination","i-trend",4],["elliottTriple","Elliott triple combination","i-trend",6],["cycleLines","Cycle lines","i-vertical",2],["timeCycles","Time cycles","i-vertical",2],["sineWave","Sine wave","i-trend",2]]],
  ["Proyeksi",[["forecast","Forecast (manual)","i-trend",2],["sector","Sector","i-rectangle",3],["anchoredVwap","Anchored VWAP","i-trend",1],["fixedVolume","Fixed range volume profile (estimated)","i-grid",2],["anchoredVolume","Anchored volume profile (estimated)","i-grid",1],["datePriceRange","Date and price range","i-ruler",2]]],
- ["Bentuk lanjutan",[["arrowMarker","Arrow marker","i-trend",2],["arrowUp","Up arrow","i-trend",1],["arrowDown","Down arrow","i-trend",1],["rotatedRectangle","Rotated rectangle","i-rectangle",3],["path","Path (4 anchors)","i-trend",4],["circle","Circle","i-rectangle",2],["polyline","Polyline (5 anchors)","i-trend",5],["arc","Arc (quadratic)","i-trend",3],["curve","Curve (quadratic)","i-trend",3],["doubleCurve","Double curve","i-trend",5]]],
+ ["Bentuk lanjutan",[["arrowMarker","Arrow marker","i-trend",2],["arrowUp","Up arrow","i-trend",1],["arrowDown","Down arrow","i-trend",1],["rotatedRectangle","Rotated rectangle","i-rectangle",3],["path","Path","i-trend",2],["circle","Circle","i-rectangle",2],["polyline","Polyline","i-trend",2],["arc","Arc (quadratic)","i-trend",3],["curve","Curve (quadratic)","i-trend",3],["doubleCurve","Double curve","i-trend",5]]],
  ["Anotasi lanjutan",[["note","Note","i-text",1],["priceNote","Price note","i-text",1],["pin","Pin","i-text",1],["label","Label","i-text",1],["comment","Comment","i-text",1],["signpost","Signpost","i-text",1],["flag","Flag","i-text",1],["idea","Idea (local note)","i-text",1]]],
  ["Visual lokal",[["emoji","Emoji","i-text",1],["sticker","Sticker (local glyph)","i-text",1],["visualIcon","Icon (local glyph)","i-text",1]]]
 ];
 export const POINT_KEYS=['a','b','c','d','e','f','g'];
+export const isVariablePath=t=>t==='path'||t==='polyline';
+export const MAX_PATH_POINTS=128;
 export const TOOL_CATALOG=Object.fromEntries(TOOL_GROUPS.flatMap(([group,tools])=>tools.map(([id,label,icon,points])=>[id,{id,label,icon,points,group}])));
 export const TOOL_IDS=Object.keys(TOOL_CATALOG).filter(id=>TOOL_CATALOG[id].points>0);
 export const DEFAULT_FIB=[0,.236,.382,.5,.618,.705,.786,1];
@@ -47,7 +49,7 @@ export function normalizeAnchor(candles,p){
 export function normalizeStyle(type,style={}){
  if(!style||typeof style!=='object')style={};
  const zone=type==='obZone'?'#a68afb':type==='fvgZone'?'#20b9a3':type==='liquidity'?'#e5b34d':'#598eff';
- return {color:hex(style.color,zone),fill:hex(style.fill,zone),width:clamp(number(style.width,type==='highlighter'?12:2),1,20),opacity:clamp(number(style.opacity,type==='highlighter'?.28:.14),0,1),dash:['solid','dashed','dotted'].includes(style.dash)?style.dash:'solid',extend:style.extend===true};
+ return {color:hex(style.color,zone),fill:hex(style.fill,zone),width:clamp(number(style.width,type==='highlighter'?12:2),1,20),opacity:clamp(number(style.opacity,type==='highlighter'?.28:.14),0,1),dash:['solid','dashed','dotted'].includes(style.dash)?style.dash:'solid',extend:style.extend===true,extendLeft:style.extendLeft===true};
 }
 export function normalizeLevels(levels,type='fibo'){
  const defaults=type==='fibExtension'?DEFAULT_EXTENSION:DEFAULT_FIB;
@@ -82,7 +84,13 @@ export function normalizeDrawing(d,candles=[]){
   if(!out.c){Object.assign(out,seedPosition(d.type,a,b,candles))}
   if(!positionStats(out))return null;
  }
- if(['fibo','fibExtension'].includes(d.type))out.levels=normalizeLevels(d.levels,d.type);
+ if(['fibo','fibExtension'].includes(d.type)){out.levels=normalizeLevels(d.levels,d.type);out.reverse=d.reverse===true;}
+ if(isVariablePath(d.type)){
+  const raw=Array.isArray(d.points)?d.points:POINT_KEYS.map(k=>d[k]).filter(Boolean);
+  if(raw.length<2||raw.length>MAX_PATH_POINTS)return null;
+  out.points=raw.map(p=>normalizeAnchor(candles,p));if(out.points.some(p=>!p))return null;
+  out.a=out.points[0];out.b=out.points.at(-1);out.closed=d.type==='polyline'&&d.closed===true&&out.points.length>=3;
+ }
  if(['brush','highlighter'].includes(d.type)){
   out.points=(Array.isArray(d.points)?d.points:[a,b]).slice(0,600).map(p=>normalizeAnchor(candles,p)).filter(Boolean);
   if(out.points.length<2)return null;
@@ -103,7 +111,7 @@ export function rangeStats(d,candles){
 }
 export function fibPrices(d){
  const base=d.type==='fibExtension'?d.c?.price:d.a.price;if(!Number.isFinite(base))return [];
- const span=d.b.price-d.a.price;return normalizeLevels(d.levels,d.type).map(level=>({level,price:base+span*level}));
+ const span=d.b.price-d.a.price;return normalizeLevels(d.levels,d.type).map(level=>({level,price:d.reverse?(d.type==='fibExtension'?base-span*level:d.b.price-span*level):base+span*level}));
 }
 // Clip ray or infinite line to the plot rectangle, not the price/time axes.
 export function clipLine(a,b,w,h,mode='segment'){
