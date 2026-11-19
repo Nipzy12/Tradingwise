@@ -40,10 +40,22 @@ export function mountDrawingPalette({openModal,closeModal,layer,chart,toast,rend
   function closeContext(){context.classList.add('hidden');menuId=null}
   function favoriteMenu(id){if(!panel.isConnected||!canFavorite(id))return;menuId=id;$('drawingContextLabel').textContent=LABELS[id]||TOOL_CATALOG[id].label;$('drawingFavoriteAction').textContent=getPrefs().favorites.tools.includes(id)?'Hapus dari favorit':'Favoritkan';context.classList.remove('hidden');suppressUntil=Date.now()+700}
   const cancel=()=>{clearTimeout(timer);timer=null;press=null};
-  list.addEventListener('pointerdown',e=>{const b=e.target.closest('[data-draw-pick]');if(!b||e.button!==0||!canFavorite(b.dataset.drawPick))return;cancel();press={id:b.dataset.drawPick,x:e.clientX,y:e.clientY,pointer:e.pointerId};timer=setTimeout(()=>{const id=press?.id;cancel();if(id)favoriteMenu(id)},520)},{passive:true});
-  list.addEventListener('pointermove',e=>{if(press&&e.pointerId===press.pointer&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>10)cancel()},{passive:true});
-  for(const type of ['pointerup','pointercancel','pointerleave','scroll'])list.addEventListener(type,cancel,{passive:true});
-  list.addEventListener('contextmenu',e=>{const b=e.target.closest('[data-draw-pick]');if(!b||!canFavorite(b.dataset.drawPick))return;e.preventDefault();cancel();favoriteMenu(b.dataset.drawPick)});
+  function beginPress(id,x,y,source,pointer){
+   if(!canFavorite(id))return;cancel();press={id,x,y,source,pointer,started:Date.now()};
+   timer=setTimeout(()=>{if(press&&panel.isConnected)favoriteMenu(press.id)},520);
+  }
+  function moved(x,y){if(press&&Math.hypot(x-press.x,y-press.y)>10)cancel()}
+  // Touch and mouse are handled separately. Keep the pressed target until release;
+  // Android may dispatch pointercancel when its native context gesture begins.
+  list.addEventListener('touchstart',e=>{const b=e.target.closest('[data-draw-pick]'),t=e.touches[0];if(b&&t&&e.touches.length===1)beginPress(b.dataset.drawPick,t.clientX,t.clientY,'touch',t.identifier);else cancel()},{passive:true});
+  list.addEventListener('touchmove',e=>{if(press?.source==='touch'){const t=[...e.touches].find(x=>x.identifier===press.pointer);if(t)moved(t.clientX,t.clientY);else cancel()}},{passive:true});
+  list.addEventListener('touchend',e=>{if(press?.source==='touch'){const p=press,held=Date.now()-p.started>=520;cancel();if(held||menuId){if(held)favoriteMenu(p.id);e.preventDefault()}}else if(menuId)e.preventDefault()},{passive:false});
+  list.addEventListener('touchcancel',cancel,{passive:true});
+  list.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'||e.button!==0)return;const b=e.target.closest('[data-draw-pick]');if(b)beginPress(b.dataset.drawPick,e.clientX,e.clientY,'pointer',e.pointerId)},{passive:true});
+  list.addEventListener('pointermove',e=>{if(press?.source==='pointer'&&e.pointerId===press.pointer)moved(e.clientX,e.clientY)},{passive:true});
+  for(const type of ['pointerup','pointercancel','pointerleave'])list.addEventListener(type,()=>{if(press?.source==='pointer')cancel()},{passive:true});
+  list.addEventListener('scroll',()=>{if(!menuId)cancel()},{passive:true});
+  list.addEventListener('contextmenu',e=>{const b=e.target.closest('[data-draw-pick]');if(!b||!canFavorite(b.dataset.drawPick))return;e.preventDefault();favoriteMenu(b.dataset.drawPick);if(press?.source!=='touch')cancel()});
   list.addEventListener('keydown',e=>{const b=e.target.closest('[data-draw-pick]');if(b&&(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10'))){e.preventDefault();favoriteMenu(b.dataset.drawPick)}});
   function run(id){
    if(!isPaletteCommand(id)){closeModal();layer.setTool(id);render();return}
@@ -59,7 +71,7 @@ export function mountDrawingPalette({openModal,closeModal,layer,chart,toast,rend
   tabs.onclick=e=>{const b=e.target.closest('[data-drawing-tab]');if(!b)return;cancel();tab=b.dataset.drawingTab;field.value='';list.scrollTop=0;paint();b.scrollIntoView({block:'nearest',inline:'nearest'})};
   field.oninput=()=>{cancel();list.scrollTop=0;paint()};
   $('drawingFavoriteAction').onclick=()=>{const id=menuId;if(id){onFavorite(id);closeContext();paint()}};
-  $('drawingContextCancel').onclick=closeContext;context.onclick=e=>{if(e.target===context)closeContext()};
+  $('drawingContextCancel').onclick=closeContext;context.onclick=e=>{if(e.target===context&&Date.now()>=suppressUntil)closeContext()};
   $('drawingFavoritesSwitch').onchange=e=>setShowFavorites(e.target.checked);
   paint();
  });

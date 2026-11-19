@@ -50,8 +50,8 @@ try{
  await tap('[data-mobile-tool=all]');await visible('#drawingToolSearch');await snap('04-drawing-studio');
  assert.equal(await page.locator('.drawing-tile-star').count(),0);await visible('.drawing-grid-empty');
  await tap('[data-drawing-tab=trend]');await visible('[data-draw-pick=horizontal]');
- const target=await page.locator('[data-draw-pick=horizontal]').boundingBox();const cdp=await page.context().newCDPSession(page);const point={x:target.x+target.width/2,y:target.y+target.height/2};
- await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await page.waitForTimeout(650);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await visible('#drawingFavoriteAction');assert.equal(await page.locator('#drawingFavoriteAction').innerText(),'Favoritkan');await page.waitForTimeout(150);await tap('#drawingFavoriteAction');
+ await page.locator('[data-draw-pick=horizontal]').scrollIntoViewIfNeeded();const target=await page.locator('[data-draw-pick=horizontal]').boundingBox();const cdp=await page.context().newCDPSession(page);const point={x:target.x+target.width/2,y:target.y+target.height/2};
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await page.locator('#drawingFavoriteAction').waitFor({state:'visible',timeout:3000});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await visible('#drawingFavoriteAction');assert.equal(await page.locator('#drawingFavoriteAction').innerText(),'Favoritkan');await page.waitForTimeout(150);await tap('#drawingFavoriteAction');
  await tap('[data-drawing-tab=favorite]');assert.equal(await page.locator('.drawing-tile-star').count(),1);await snap('04b-favorite');
  await page.locator('[data-draw-pick=horizontal]').dispatchEvent('contextmenu');await visible('#drawingFavoriteAction');assert.equal(await page.locator('#drawingFavoriteAction').innerText(),'Hapus dari favorit');await tap('#drawingFavoriteAction');await visible('.drawing-grid-empty');
  await page.waitForTimeout(750);await page.locator('#drawingToolSearch').fill('Horizontal line');await page.locator('[data-draw-pick=horizontal]').first().tap();
