@@ -24,6 +24,7 @@ export class ChartEngine{
  priceToCoordinate(p){return this.engine.priceToCoordinate(p)}
  fit(){this.engine.fit()}
  showLast(count){this.engine.showLast(count)}
+ zoomBy(factor){if(!this.candles.length)return;const engine=this.engine,scale=engine.chart?.timeScale?.(),r=scale?.getVisibleLogicalRange?.();if(r){const count=Math.max(8,Math.min(1000,(r.to-r.from)*factor)),mid=(r.from+r.to)/2;scale.setVisibleLogicalRange({from:mid-count/2,to:mid+count/2})}else{const width=engine.w-engine.marginLeft-engine.marginRight;engine.showLast(Math.max(8,Math.min(1000,width/engine.step*factor)))}}
  resize(){this.engine.resize()}
  screenshot(){return this.engine.screenshot()}
  destroy(){this.engine.destroy()}

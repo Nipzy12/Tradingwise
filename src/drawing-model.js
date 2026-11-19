@@ -5,6 +5,7 @@ export const TOOL_GROUPS = [
  ['Fibonacci',[['fibo','Fib retracement','i-fibo',2],['fibExtension','Trend-based Fib extension','i-fibo',3]]],
  ['Bentuk & anotasi',[['rectangle','Rectangle / zona','i-rectangle',2],['ellipse','Ellipse','i-rectangle',2],['triangle','Triangle','i-rectangle',3],['brush','Brush','i-trend',2],['highlighter','Highlighter','i-trend',2],['text','Text / catatan','i-text',1],['priceLabel','Price label','i-text',1]]],
  ['Risk & measurement',[['long','Long position','i-trend',2],['short','Short position','i-trend',2],['ruler','Date & price range','i-ruler',2],['priceRange','Price range','i-ruler',2],['dateRange','Date range','i-ruler',2]]],
+ ['Advanced manual',[['circle','Circle','i-rectangle',2],['curve','Curve','i-trend',3],['arrowUp','Arrow up','i-trend',1],['arrowDown','Arrow down','i-trend',1],['fibCircle','Fib circles','i-fibo',2],['fibTime','Fib time zones','i-fibo',2],['waveABC','Elliott corrective wave','i-trend',4],['waveImpulse','Elliott impulse wave','i-trend',6],['patternXABCD','XABCD pattern','i-trend',5],['patternABCD','ABCD pattern','i-trend',4],['note','Note','i-text',1],['priceNote','Price note','i-text',1],['flag','Flag','i-text',1],['emoji','Emoji','i-text',1],['iconMark','Icon','i-text',1]]],
  ['SMC / ICT manual',[['obZone','Order block zone','i-rectangle',2],['fvgZone','Fair value gap zone','i-rectangle',2],['liquidity','Liquidity level','i-horizontal',1]]]
 ];
 export const TOOL_CATALOG=Object.fromEntries(TOOL_GROUPS.flatMap(([group,tools])=>tools.map(([id,label,icon,points])=>[id,{id,label,icon,points,group}])));
@@ -69,6 +70,7 @@ export function normalizeDrawing(d,candles=[]){
  const a=normalizeAnchor(candles,d.a),b=normalizeAnchor(candles,d.b||d.a);if(!a||!b)return null;
  const out={id:String(d.id||globalThis.crypto?.randomUUID?.()||Date.now()+Math.random()).slice(0,80),type:d.type,a,b,style:normalizeStyle(d.type,d.style),text:String(d.text??'').slice(0,200),locked:d.locked===true,hidden:d.hidden===true};
  if(TOOL_CATALOG[d.type].points===3){out.c=normalizeAnchor(candles,d.c);if(!out.c)return null}
+ if(TOOL_CATALOG[d.type].points>3){const count=TOOL_CATALOG[d.type].points;if(!Array.isArray(d.points)||d.points.length!==count)return null;out.points=d.points.map(p=>normalizeAnchor(candles,p));if(out.points.some(p=>!p))return null;out.a=out.points[0];out.b=out.points[1];}
  if(['long','short'].includes(d.type)){
   out.risk=normalizeRisk(d.risk);out.c=normalizeAnchor(candles,d.c);
   if(!out.c){Object.assign(out,seedPosition(d.type,a,b,candles))}

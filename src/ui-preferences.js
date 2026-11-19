@@ -9,7 +9,7 @@ export const DEFAULT_UI_PREFS=Object.freeze({
  favorites:{
   symbols:['BIQUOTE:XAUUSD','BINANCE:BTCUSDT'],
   timeframes:['5m','15m','1h','4h','1d'],
-  tools:['trend','horizontal','rectangle'],
+  tools:[],
   indicators:['ema9','ema21']
  },
  settings:{
@@ -19,6 +19,7 @@ export const DEFAULT_UI_PREFS=Object.freeze({
  },
  watchlistSort:'manual',
  showFavoritesBar:true,
+ showDrawingFavorites:false,
  panelCollapsed:true,
  sidebarCollapsed:true
 });
@@ -56,12 +57,14 @@ export function normalizeUiPreferences(input={}){
   },
   watchlistSort:['manual','symbol','favorites','change'].includes(raw.watchlistSort)?raw.watchlistSort:'manual',
   showFavoritesBar:bool(raw.showFavoritesBar,true),
+  showDrawingFavorites:bool(raw.showDrawingFavorites,false),
+  drawingFavoritesInitialized:true,
   panelCollapsed:bool(raw.panelCollapsed,true),
   sidebarCollapsed:bool(raw.sidebarCollapsed,true)
  };
 }
 export function readUiPreferences(storage){
- try{return normalizeUiPreferences(JSON.parse(storage?.getItem(UI_PREF_KEY)||'{}'))}
+ try{const raw=JSON.parse(storage?.getItem(UI_PREF_KEY)||'{}');if(raw?.drawingFavoritesInitialized!==true&&JSON.stringify(raw?.favorites?.tools)===JSON.stringify(['trend','horizontal','rectangle']))raw.favorites.tools=[];return normalizeUiPreferences(raw)}
  catch{return normalizeUiPreferences()}
 }
 export function writeUiPreferences(storage,data){

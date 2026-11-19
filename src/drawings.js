@@ -86,6 +86,7 @@ export class DrawingLayer{
   if(position(type)){Object.assign(item,seedPosition(type,a,b,this.chart.candles));item.risk=normalizeRisk(this.templates[type]?.risk)}
   if(['fibo','fibExtension'].includes(type))item.levels=normalizeLevels(this.templates[type]?.levels,type);
   if(freehand(type)){item.points=points;item.a=points[0];item.b=points.at(-1)}
+  if(TOOL_CATALOG[type].points>3)item.points=points.slice(0,TOOL_CATALOG[type].points);
   return item;
  }
  down(e){
@@ -101,7 +102,7 @@ export class DrawingLayer{
   e.preventDefault();e.stopPropagation();this.capture(e);
   if(one(this.tool)){
    const item=this.make(this.tool,[p]);
-   if(this.tool==='text'){const txt=prompt('Teks anotasi chart:',item.text||'Catatan analisis');if(!txt?.trim()){this.release(e);this.finishTool();return}item.text=txt}
+   if(['text','note','priceNote','emoji','iconMark'].includes(this.tool)){const txt=prompt(this.tool==='emoji'?'Masukkan emoji':this.tool==='iconMark'?'Masukkan simbol / ikon':'Teks anotasi chart:',item.text||({emoji:'🙂',iconMark:'★'}[this.tool]||'Catatan analisis'));if(!txt?.trim()){this.release(e);this.finishTool();return}item.text=txt}
    this.add(item);this.release(e);this.finishTool();return;
   }
   this.gesture={mode:'create',first:p,last:p,x:e.clientX,y:e.clientY,moved:false,points:[p]};
@@ -122,7 +123,8 @@ export class DrawingLayer{
   e.preventDefault();
   if(g.mode==='edit'){
    let d=deep(g.original);
-   if(g.handle&&['a','b','c'].includes(g.handle)){
+   if(g.handle&&/^p\d+$/.test(g.handle)&&d.points){const i=Number(g.handle.slice(1));d.points[i]=p;d.a=d.points[0];d.b=d.points[1]}
+   else if(g.handle&&['a','b','c'].includes(g.handle)){
     d[g.handle]=p;
     if(one(d.type)&&g.handle==='a')d.b=p;
    }else d=shiftDrawing(d,this.chart.candles,p.logical-g.start.logical,p.price-g.start.price);
@@ -208,6 +210,25 @@ export class DrawingLayer{
    }else if(t==='vertical'){line({x:a.x,y:0},{x:a.x,y:bottom})}
    else if(['rectangle','obZone','fvgZone'].includes(t)){
     rect(a.x,a.y,style.extend?right:b.x,b.y);if(t!=='rectangle'||d.text)label(Math.max(0,Math.min(a.x,b.x)+5),Math.min(a.y,b.y)+13,d.text||({obZone:'OB',fvgZone:'FVG'}[t]||''));
+   }else if(t==='circle'||t==='fibCircle'){
+    const radius=Math.hypot(b.x-a.x,b.y-a.y),levels=t==='fibCircle'?[.236,.382,.5,.618,.786,1,1.618]:[1];
+    for(const level of levels){const r=Math.max(.5,radius*level);group.push('<circle cx="'+n(a.x)+'" cy="'+n(a.y)+'" r="'+n(r)+'" fill="'+(t==='circle'?style.fill:'none')+'" fill-opacity="'+style.opacity+'"'+stroke+' pointer-events="'+(t==='circle'?'all':'stroke')+'"/>');if(t==='fibCircle')label(a.x+r+3,a.y-3,String(level))}
+   }else if(t==='fibTime'){
+    const pitch=resolveAnchor(this.chart.candles,d.b).logical-resolveAnchor(this.chart.candles,d.a).logical;
+    const start=resolveAnchor(this.chart.candles,d.a).logical;
+    for(const k of [0,1,2,3,5,8,13,21,34]){const x=this.chart.logicalToCoordinate(start+pitch*k);if(Number.isFinite(x)){line({x,y:0},{x,y:bottom});label(x+3,15,String(k))}}
+   }else if(t==='curve'){
+    const q=c||b;group.push('<path d="M'+xy(a)+' Q'+xy(b)+' '+xy(q)+'" fill="none"'+stroke+' pointer-events="stroke"/><path d="M'+xy(a)+' Q'+xy(b)+' '+xy(q)+'" fill="none" stroke="transparent" stroke-width="18" pointer-events="stroke"/>');
+   }else if(['waveABC','waveImpulse','patternXABCD','patternABCD'].includes(t)){
+    const pts=(d.points||[d.a,d.b]).map(p=>this.point(p)).filter(Boolean),labels=({waveABC:['0','A','B','C'],waveImpulse:['0','1','2','3','4','5'],patternXABCD:['X','A','B','C','D'],patternABCD:['A','B','C','D']})[t];
+    for(let i=1;i<pts.length;i++)line(pts[i-1],pts[i]);
+    pts.forEach((p,i)=>label(p.x+4,p.y-7,labels[i]||''));
+   }else if(['arrowUp','arrowDown','flag'].includes(t)){
+    const sign=t==='arrowDown'?-1:1,paths=t==='flag'?'M'+xy(a)+' l0 -29 22 0 -6 7 6 7 -22 0':'M'+xy(a)+' l-10 '+(12*sign)+' h6 v'+(13*sign)+' h8 v'+(-13*sign)+' h6 Z';group.push('<path d="'+paths+'" fill="'+color+'"'+stroke+' pointer-events="all"/>');
+   }else if(['note','priceNote','emoji','iconMark'].includes(t)){
+    const txt=t==='priceNote'?this.chart.formatPrice(d.a.price)+' '+d.text:d.text||({emoji:'🙂',iconMark:'★'}[t]||'Catatan');
+    if(t==='note'||t==='priceNote'){const width=Math.min(200,Math.max(41,txt.length*7+12));rect(a.x,a.y-27,a.x+width,a.y-5);line(a,{x:a.x+8,y:a.y-5})}
+    group.push('<text x="'+n(a.x+5)+'" y="'+n(a.y-10)+'" font-size="'+(['emoji','iconMark'].includes(t)?25:12)+'" fill="'+color+'" pointer-events="all">'+enc(txt)+'</text>');
    }else if(t==='ellipse'){
     group.push('<ellipse cx="'+n((a.x+b.x)/2)+'" cy="'+n((a.y+b.y)/2)+'" rx="'+Math.max(1,Math.abs(b.x-a.x)/2)+'" ry="'+Math.max(1,Math.abs(b.y-a.y)/2)+'" fill="'+style.fill+'" fill-opacity="'+style.opacity+'"'+stroke+' pointer-events="all"/>');
    }else if(t==='triangle'){
@@ -235,7 +256,7 @@ export class DrawingLayer{
     else{rect(a.x,0,b.x,bottom);label(Math.min(a.x,b.x)+4,20,q.bars+' bars · '+round(q.seconds/60)+' min')}
    }
    if(active&&!this.lockAll&&!d.locked&&!freehand(t)&&this.tool==='pointer'){
-    const handles=one(t)?[['a',a]]:[['a',a],['b',b],...(c?[['c',c]]:[])];
+    const handles=TOOL_CATALOG[t].points>3?(d.points||[]).map((p,i)=>['p'+i,this.point(p)]).filter(x=>x[1]):one(t)?[['a',a]]:[['a',a],['b',b],...(c?[['c',c]]:[])];
     for(const [key,q] of handles){group.push('<circle cx="'+n(q.x)+'" cy="'+n(q.y)+'" r="5" fill="#11141b" stroke="#b8cdff" stroke-width="2" data-handle="'+key+'" pointer-events="all"/><circle cx="'+n(q.x)+'" cy="'+n(q.y)+'" r="12" fill="transparent" data-handle="'+key+'" pointer-events="all"/>')}
    }
    group.push('</g>');parts.push(...group);

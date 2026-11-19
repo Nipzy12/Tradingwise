@@ -48,7 +48,14 @@ try{
  await tap('[data-mobile-action=analysis]');await visible('#analysisHub');await snap('03-analysis-hub');
  await tap('[data-hub-action=toolstrip]');await visible('#mobileToolFavorites');
  await tap('[data-mobile-tool=all]');await visible('#drawingToolSearch');await snap('04-drawing-studio');
- await page.locator('#drawingToolSearch').fill('Horizontal line');await page.locator('[data-draw-pick=horizontal]').first().tap();
+ assert.equal(await page.locator('.drawing-tile-star').count(),0);
+ await tap('[data-draw-tab="Peralatan Tren"]');await visible('[data-draw-pick=horizontal]');
+ const tile=page.locator('[data-draw-pick=horizontal]'),b=await tile.boundingBox(),cdp=await page.context().newCDPSession(page),point={x:b.x+b.width/2,y:b.y+b.height/2};
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await page.waitForTimeout(700);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await visible('#drawingHoldMenu');assert.equal(await page.locator('[data-hold-toggle]').innerText(),'Favoritkan');await tap('[data-hold-toggle]');assert.equal(await tile.locator('.drawing-tile-star').count(),1);
+ await tap('[data-draw-tab="Favorit"]');await visible('[data-draw-pick=horizontal]');await snap('04b-favorites');
+ const pinBox=await page.locator('[data-draw-pick=horizontal]').boundingBox();await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:pinBox.x+pinBox.width/2,y:pinBox.y+pinBox.height/2}]});await page.waitForTimeout(700);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await visible('#drawingHoldMenu');assert.equal(await page.locator('[data-hold-toggle]').innerText(),'Hapus dari favorit');await tap('[data-hold-toggle]');assert.equal(await page.locator('.drawing-tile-star').count(),0);
+ await page.locator('#drawingToolSearch').fill('Horizontal line');await page.waitForTimeout(850);await page.locator('[data-draw-pick=horizontal]').first().tap();
  await visible('#drawingHint');const plot=await page.locator('#chartStage').boundingBox();
  await page.touchscreen.tap(plot.x+Math.floor(plot.width*.4),plot.y+Math.floor(plot.height*.45));
  await page.waitForFunction(()=>document.querySelector('#drawingOverlay [data-drawing-id]'));await visible('#drawingQuickBar');await snap('05-drawing');

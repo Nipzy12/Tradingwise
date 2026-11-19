@@ -4,7 +4,8 @@ import {
  readUiPreferences, writeUiPreferences, normalizeUiPreferences,
  toggleFavorite, hasFavorite, orderWatchlist, TIMEFRAMES, DEFAULT_UI_PREFS
 } from './ui-preferences.js';
-import {TOOL_GROUPS,TOOL_CATALOG} from './drawing-model.js';
+import {TOOL_CATALOG} from './drawing-model.js';
+import {mountDrawingPalette,paletteMarkup} from './drawing-palette.js';
 
 const el=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -59,26 +60,8 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
   const items=prefs.favorites.symbols.map(id=>marketInfo(id)).filter(x=>(x.symbol+' '+x.name+' '+x.provider).toLowerCase().includes(query));
   return {items,total:items.length,counts:{},errors:{}};
  }
- function drawingToolsModal(){
-  openModal('Drawing Studio','<div class="drawing-palette"><input type="search" id="drawingToolSearch" placeholder="Cari tool, mis. trend, FVG, Fibonacci..." aria-label="Cari drawing tools"><div class="drawing-mode-controls"><label>Magnet <select id="drawingMagnetMode"><option value="off">Off</option><option value="weak">Weak</option><option value="strong">Strong</option></select></label><button type="button" id="drawingKeepToggle">Keep drawing</button><button type="button" id="drawingLockToggle">Lock all</button><button type="button" id="drawingHideToggle">Hide all</button></div><div id="drawingToolList"></div><p class="settings-note">Pilih tool, ketuk titik atau drag pada chart. Tool favorit tersedia di toolbar. Pilih objek untuk menggeser atau mengubah propertinya.</p></div>',root=>{
-   const search=el('drawingToolSearch'),list=el('drawingToolList'),mag=el('drawingMagnetMode');mag.value=drawingLayer.magnetMode;
-   function modeControls(){for(const [id,active] of [['drawingKeepToggle',drawingLayer.keepDrawing],['drawingLockToggle',drawingLayer.lockAll],['drawingHideToggle',drawingLayer.hidden]]){const btn=el(id);btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))}}
-   function paint(){
-    const query=search.value.toLowerCase().trim(),pins=prefs.favorites.tools;
-    const matches=t=>(t.label+' '+t.id+' '+t.group).toLowerCase().includes(query);
-    const toolRow=t=>'<div class="drawing-tool-row"><button type="button" data-draw-pick="'+esc(t.id)+'" class="'+(drawingLayer.tool===t.id?'active':'')+'">'+icon(t.icon)+'<span>'+esc(t.label)+'</span><small>'+(t.points===0?'Mode':t.id==='brush'||t.id==='highlighter'?'Drag':t.points+' titik')+'</small></button>'+(t.points>0?'<button type="button" class="drawing-pin'+(current('tools',t.id)?' is-favorite':'')+'" data-draw-pin="'+esc(t.id)+'" aria-label="Favorit '+esc(t.label)+'">'+(current('tools',t.id)?'★':'☆')+'</button>':'')+'</div>';
-    const groups=[['Favorit',pins.map(id=>TOOL_CATALOG[id]).filter(Boolean)],...TOOL_GROUPS.map(([label,items])=>[label,items.map(x=>TOOL_CATALOG[x[0]])])];
-    list.innerHTML=groups.map(([label,items])=>{const visible=items.filter(matches);return visible.length?'<section class="drawing-category"><h3>'+esc(label)+'</h3>'+visible.map(toolRow).join('')+'</section>':''}).join('')||'<div class="side-info">Tool tidak ditemukan.</div>';
-   }
-   search.oninput=paint;
-   list.onclick=e=>{const pin=e.target.closest('[data-draw-pin]'),pick=e.target.closest('[data-draw-pick]');if(pin){favorite('tools',pin.dataset.drawPin);paint()}else if(pick){closeModal();drawingLayer.setTool(pick.dataset.drawPick);render()}};
-   mag.onchange=()=>drawingLayer.setMagnet(mag.value);
-   el('drawingKeepToggle').onclick=()=>{drawingLayer.keepDrawing=!drawingLayer.keepDrawing;drawingLayer.syncControls();modeControls()};
-   el('drawingLockToggle').onclick=()=>{drawingLayer.lockAll=!drawingLayer.lockAll;drawingLayer.syncControls();drawingLayer.render();modeControls()};
-   el('drawingHideToggle').onclick=()=>{drawingLayer.hidden=!drawingLayer.hidden;drawingLayer.syncControls();drawingLayer.render();modeControls()};
-   modeControls();paint();
-  });
- }
+ function setShowDrawingFavorites(value){prefs.showDrawingFavorites=Boolean(value);save();render()}
+ function drawingToolsModal(){openModal('Gambar',paletteMarkup(),root=>mountDrawingPalette(root,{drawingLayer,chart,getPrefs:()=>prefs,toggleFavorite:favorite,setShow:setShowDrawingFavorites,closeModal,render,toast}))}
  function timeframesModal(){
   const html='<p class="settings-note">Klik interval untuk memilih. Klik bintang untuk menampilkan atau menyembunyikannya di toolbar.</p><div class="modal-list">'+TIMEFRAMES.map(tf=>{
    const pinned=current('timeframes',tf);
@@ -221,7 +204,7 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
  return {
   install,render,apply,hasFavorite:current,toggleFavorite:favorite,
   orderWatchlist:order,favoriteCatalog,drawingToolsModal,timeframesModal,chartSettingsModal,watchlistSettings,favoritesModal,
-  setLayout,importPrefs,exportPrefs:()=>normalizeUiPreferences(prefs),
+  setLayout,setShowDrawingFavorites,importPrefs,exportPrefs:()=>normalizeUiPreferences(prefs),
   setChartPreference(key,value){if(key in prefs.settings){prefs.settings[key]=value;save();apply()}},
   get panelCollapsed(){return prefs.panelCollapsed},
   get sidebarCollapsed(){return prefs.sidebarCollapsed}

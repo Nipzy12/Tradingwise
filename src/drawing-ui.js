@@ -9,7 +9,7 @@ export function openDrawingProperties(layer,id,{openModal,closeModal,toast}){
  const d=clone(live),s=normalizeStyle(d.type,d.style),risk=normalizeRisk(d.risk),t=d.type;
  const field=(title,key,value,extra='')=>'<label><span>'+title+'</span><input data-setting="'+key+'" value="'+esc(value)+'" '+extra+'></label>';
  const checkbox=(title,key,value)=>'<label><span>'+title+'</span><input data-setting="'+key+'" type="checkbox" '+(value?'checked':'')+'></label>';
- const points=isBrush(t)?'<p class="settings-note">Brush bisa digeser sebagai satu objek.</p>':['a','b','c'].filter(k=>d[k]&&(TOOL_CATALOG[t].points!==1||k==='a')).map(k=>{
+ const points=TOOL_CATALOG[t].points>3?'<p class="settings-note">Ubah masing-masing titik motif dengan menarik handle langsung pada chart.</p>':isBrush(t)?'<p class="settings-note">Brush bisa digeser sebagai satu objek.</p>':['a','b','c'].filter(k=>d[k]&&(TOOL_CATALOG[t].points!==1||k==='a')).map(k=>{
    const name=isPosition(t)?({a:'Entry',b:'Take profit',c:'Stop loss'})[k]:'Titik '+({a:'1',b:'2',c:'3'})[k];
    return '<div class="drawing-coordinate"><strong>'+name+'</strong>'+field('Harga asli','price-'+k,d[k].price,'type="number" step="any" required')+field('Waktu (UTC)','time-'+k,tf(d[k].time),'type="datetime-local" step="1" required')+'</div>';
  }).join('');

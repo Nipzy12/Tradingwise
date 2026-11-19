@@ -1,0 +1,34 @@
+/* Original mobile drawing palette inspired by supplied Android screenshots. */
+#modalBackdrop[data-sheet=drawing] .modal{height:min(92dvh,850px);max-height:94dvh;display:flex}
+#modalBackdrop[data-sheet=drawing] #modalBody{flex:1;min-height:0;padding:0;overflow:hidden}
+.drawing-palette-v2{--draw-bg:#171717;--draw-tile:#222222;--draw-fg:#e3e3e5;--draw-sub:#909094;--draw-edge:#303034;position:relative;height:100%;display:flex;flex-direction:column;background:var(--draw-bg);color:var(--draw-fg)}
+body[data-theme=light] .drawing-palette-v2{--draw-bg:#fff;--draw-tile:#f1f2f4;--draw-fg:#202124;--draw-sub:#737780;--draw-edge:#dedfe4}
+.drawing-palette-v2 [hidden]{display:none!important}
+.drawing-search-box{display:flex;align-items:center;gap:10px;margin:4px 15px 10px;padding:5px 12px;background:var(--draw-tile);border-radius:12px;min-height:44px}
+#modalBody .drawing-search-box input{width:100%;min-width:0;border:0!important;background:transparent!important;color:var(--draw-fg);font-size:17px;outline:0!important;padding:0}
+.drawing-search-box svg{width:23px!important;height:23px!important;color:var(--draw-sub)}
+.drawing-tabs{display:flex;flex-shrink:0;overflow-x:auto;gap:8px;scrollbar-width:none;white-space:nowrap;padding:3px 15px 11px;touch-action:pan-x}
+.drawing-tabs::-webkit-scrollbar{display:none}
+.drawing-tabs button{padding:7px 10px;color:var(--draw-sub);font-size:16px;font-weight:550;border-radius:8px;flex:0 0 auto}
+.drawing-tabs button.active{background:var(--draw-tile);color:var(--draw-fg)}
+.drawing-tile-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 15px 14px;touch-action:pan-y}
+.drawing-tile-section h3{font-weight:550;color:var(--draw-sub);font-size:13px;text-transform:uppercase;margin:12px 0 10px}
+.drawing-tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.drawing-tile-section+.drawing-tile-section{margin-top:13px}
+.drawing-tile{min-width:0;position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;height:72px;padding:7px 4px;border-radius:11px;background:var(--draw-tile);color:var(--draw-fg);border:1px solid transparent;-webkit-touch-callout:none;user-select:none;touch-action:pan-y}
+.drawing-tile svg{width:28px!important;height:28px!important;stroke-width:1.7}
+.drawing-tile.active{border-color:#6083bc;background:var(--draw-tile)}
+.drawing-tile-name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:450}
+.drawing-tile-star{position:absolute;right:6px;top:3px;color:#e5a32c;font-size:17px;line-height:1.2;pointer-events:none}
+.drawing-empty{padding:35px 12px;text-align:center;color:var(--draw-sub);font-size:13px;line-height:1.6}
+.drawing-favorite-footer{border-top:1px solid var(--draw-edge);display:flex;align-items:center;gap:12px;min-height:52px;flex-shrink:0;padding:8px 15px;color:var(--draw-fg);font-size:14px}
+.drawing-favorite-footer span{flex:1;min-width:0}
+#drawingShowFavorites{appearance:none;width:42px!important;height:24px!important;min-height:0!important;border:0!important;border-radius:12px!important;background:#48484a!important;position:relative;flex-shrink:0;padding:0!important;cursor:pointer}
+#drawingShowFavorites:before{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#eee;transition:transform .15s}
+#drawingShowFavorites:checked{background:#4877d9!important}
+#drawingShowFavorites:checked:before{transform:translateX(18px)}
+.drawing-hold-backdrop{position:absolute;inset:0;z-index:12;background:#0006;display:flex;align-items:flex-end;padding:12px}
+.drawing-hold-menu{width:100%;border:1px solid var(--draw-edge);background:var(--draw-tile);color:var(--draw-fg);border-radius:12px;overflow:hidden;box-shadow:0 7px 20px #0005}
+.drawing-hold-menu strong{display:block;font-size:13px;color:var(--draw-sub);padding:13px 16px}
+.drawing-hold-menu button{width:100%;padding:13px 16px;text-align:left;font-size:15px;border-top:1px solid var(--draw-edge)}
+@media(max-width:760px){#modalBackdrop[data-sheet=drawing] .modal{height:95dvh;max-height:95dvh;border-radius:0;background:#171717}body[data-theme=light] #modalBackdrop[data-sheet=drawing] .modal{background:#fff}#modalBackdrop[data-sheet=drawing] .modal-header{border:0;height:55px;min-height:55px;padding:0 15px;font-size:23px}#modalBackdrop[data-sheet=drawing] .modal-header button{opacity:.7}#modalBackdrop[data-sheet=drawing] .mobile-sheet-grip{margin-top:10px}}
