@@ -23,6 +23,7 @@ export class ChartEngine{
  coordinateToPrice(y){return this.engine.coordinateToPrice(y)}
  priceToCoordinate(p){return this.engine.priceToCoordinate(p)}
  fit(){this.engine.fit()}
+ zoomBy(factor){if(!Number.isFinite(factor)||factor<=0)return;const scale=this.engine.chart?.timeScale();if(scale){const r=scale.getVisibleLogicalRange();if(r){const span=Math.max(5,Math.min(3000,(r.to-r.from)/factor));scale.setVisibleLogicalRange({from:r.to-span,to:r.to})}}else{const e=this.engine;e.step=Math.max(3,Math.min(38,e.step*factor));e.render()}}
  showLast(count){this.engine.showLast(count)}
  resize(){this.engine.resize()}
  screenshot(){return this.engine.screenshot()}

@@ -6,13 +6,13 @@ import {
  orderWatchlist,readUiPreferences,writeUiPreferences
 } from '../src/ui-preferences.js';
 
-test('defaults provide functional pinned symbol, timeframe, tool and indicator collections',()=>{
+test('drawing favorites start empty while unrelated defaults remain available',()=>{
  const p=normalizeUiPreferences();
  assert.equal(p.settings.grid,true);
  assert.equal(p.panelCollapsed,true);
  assert.ok(hasFavorite(p,'symbols','BINANCE:BTCUSDT'));
  assert.ok(hasFavorite(p,'timeframes','1h'));
- assert.ok(hasFavorite(p,'tools','trend'));
+ assert.deepEqual(p.favorites.tools,[]);
  assert.ok(hasFavorite(p,'indicators','ema9'));
  assert.equal(p.favorites.timeframes.every(x=>TIMEFRAMES.includes(x)),true);
 });
@@ -73,4 +73,12 @@ test('watchlist sorts manual/favorites/symbol/change without mutating source ord
  assert.deepEqual(orderWatchlist(a,'symbol',[]),['BINANCE:BTCUSDT','BINANCE:ETHUSDT','BIQUOTE:XAUUSD']);
  assert.deepEqual(orderWatchlist(a,'change',[],{'BIQUOTE:XAUUSD':-2,'BINANCE:BTCUSDT':4,'BINANCE:ETHUSDT':-1}),['BINANCE:BTCUSDT','BINANCE:ETHUSDT','BIQUOTE:XAUUSD']);
  assert.deepEqual(a,before);
+});
+
+test('old stock drawing favorites migrate once, custom or explicitly saved selections remain',()=>{
+ const m=new Map(),storage={getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v)};
+ m.set(UI_PREF_KEY,JSON.stringify({favorites:{tools:['trend','horizontal','rectangle'],symbols:['BINANCE:ETHUSDT']}}));
+ const p=readUiPreferences(storage);assert.deepEqual(p.favorites.tools,[]);assert.deepEqual(p.favorites.symbols,['BINANCE:ETHUSDT']);assert.equal(p.showDrawingFavorites,false);
+ const saved=writeUiPreferences(storage,{...p,favorites:{...p.favorites,tools:['trend','horizontal','rectangle']},showDrawingFavorites:true});assert.deepEqual(readUiPreferences(storage),saved);
+ m.set(UI_PREF_KEY,JSON.stringify({favorites:{tools:['fibo']}}));assert.deepEqual(readUiPreferences(storage).favorites.tools,['fibo']);
 });

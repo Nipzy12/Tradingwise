@@ -5,6 +5,7 @@ import {
  toggleFavorite, hasFavorite, orderWatchlist, TIMEFRAMES, DEFAULT_UI_PREFS
 } from './ui-preferences.js';
 import {TOOL_GROUPS,TOOL_CATALOG} from './drawing-model.js';
+import {mountDrawingPalette} from './drawing-palette.js';
 
 const el=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -60,6 +61,7 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
   return {items,total:items.length,counts:{},errors:{}};
  }
  function drawingToolsModal(){
+  if(window.matchMedia('(max-width:760px)').matches){mountDrawingPalette({openModal,closeModal,layer:drawingLayer,chart,toast,render,getPrefs:()=>prefs,onFavorite:id=>favorite('tools',id),setShowFavorites:value=>{prefs.showDrawingFavorites=Boolean(value);save();render()}});return}
   openModal('Drawing Studio','<div class="drawing-palette"><input type="search" id="drawingToolSearch" placeholder="Cari tool, mis. trend, FVG, Fibonacci..." aria-label="Cari drawing tools"><div class="drawing-mode-controls"><label>Magnet <select id="drawingMagnetMode"><option value="off">Off</option><option value="weak">Weak</option><option value="strong">Strong</option></select></label><button type="button" id="drawingKeepToggle">Keep drawing</button><button type="button" id="drawingLockToggle">Lock all</button><button type="button" id="drawingHideToggle">Hide all</button></div><div id="drawingToolList"></div><p class="settings-note">Pilih tool, ketuk titik atau drag pada chart. Tool favorit tersedia di toolbar. Pilih objek untuk menggeser atau mengubah propertinya.</p></div>',root=>{
    const search=el('drawingToolSearch'),list=el('drawingToolList'),mag=el('drawingMagnetMode');mag.value=drawingLayer.magnetMode;
    function modeControls(){for(const [id,active] of [['drawingKeepToggle',drawingLayer.keepDrawing],['drawingLockToggle',drawingLayer.lockAll],['drawingHideToggle',drawingLayer.hidden]]){const btn=el(id);btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))}}
@@ -222,6 +224,7 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
   install,render,apply,hasFavorite:current,toggleFavorite:favorite,
   orderWatchlist:order,favoriteCatalog,drawingToolsModal,timeframesModal,chartSettingsModal,watchlistSettings,favoritesModal,
   setLayout,importPrefs,exportPrefs:()=>normalizeUiPreferences(prefs),
+  setDrawingFavoritesVisible(value){prefs.showDrawingFavorites=Boolean(value);save();render()},
   setChartPreference(key,value){if(key in prefs.settings){prefs.settings[key]=value;save();apply()}},
   get panelCollapsed(){return prefs.panelCollapsed},
   get sidebarCollapsed(){return prefs.sidebarCollapsed}

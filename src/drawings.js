@@ -1,4 +1,5 @@
-import {TOOL_CATALOG,clone,anchor,normalizeAnchor,resolveAnchor,normalizeDrawing,normalizeStyle,normalizeRisk,normalizeLevels,seedPosition,positionStats,shiftDrawing,rangeStats,fibPrices,clipLine} from './drawing-model.js';
+import {renderAdvanced,NOTE_TYPES} from './drawing-advanced.js';
+import {POINT_KEYS,TOOL_CATALOG,clone,anchor,normalizeAnchor,resolveAnchor,normalizeDrawing,normalizeStyle,normalizeRisk,normalizeLevels,seedPosition,positionStats,shiftDrawing,rangeStats,fibPrices,clipLine} from './drawing-model.js';
 const $=id=>document.getElementById(id);
 const enc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const freehand=t=>t==='brush'||t==='highlighter';
@@ -83,6 +84,7 @@ export class DrawingLayer{
  release(e){try{this.svg.releasePointerCapture(e.pointerId)}catch{}}
  make(type,points){
   const a=points[0],b=points[1]||a,c=points[2],item={type,a,b,c,style:normalizeStyle(type,this.templates[type]?.style),text:this.templates[type]?.text||''};
+  for(let i=3;i<POINT_KEYS.length&&i<points.length;i++)item[POINT_KEYS[i]]=points[i];
   if(position(type)){Object.assign(item,seedPosition(type,a,b,this.chart.candles));item.risk=normalizeRisk(this.templates[type]?.risk)}
   if(['fibo','fibExtension'].includes(type))item.levels=normalizeLevels(this.templates[type]?.levels,type);
   if(freehand(type)){item.points=points;item.a=points[0];item.b=points.at(-1)}
@@ -101,7 +103,7 @@ export class DrawingLayer{
   e.preventDefault();e.stopPropagation();this.capture(e);
   if(one(this.tool)){
    const item=this.make(this.tool,[p]);
-   if(this.tool==='text'){const txt=prompt('Teks anotasi chart:',item.text||'Catatan analisis');if(!txt?.trim()){this.release(e);this.finishTool();return}item.text=txt}
+   if(this.tool==='text'||NOTE_TYPES.includes(this.tool)){const defaults={emoji:'⭐',sticker:'🚀',visualIcon:'♥',flag:'⚑',pin:'●',idea:'💡'};const txt=prompt('Teks atau simbol anotasi chart:',item.text||defaults[this.tool]||'Catatan analisis');if(!txt?.trim()){this.release(e);this.finishTool();return}item.text=txt}
    this.add(item);this.release(e);this.finishTool();return;
   }
   this.gesture={mode:'create',first:p,last:p,x:e.clientX,y:e.clientY,moved:false,points:[p]};
@@ -122,7 +124,7 @@ export class DrawingLayer{
   e.preventDefault();
   if(g.mode==='edit'){
    let d=deep(g.original);
-   if(g.handle&&['a','b','c'].includes(g.handle)){
+   if(g.handle&&POINT_KEYS.includes(g.handle)){
     d[g.handle]=p;
     if(one(d.type)&&g.handle==='a')d.b=p;
    }else d=shiftDrawing(d,this.chart.candles,p.logical-g.start.logical,p.price-g.start.price);
@@ -196,7 +198,8 @@ export class DrawingLayer{
    const label=(x,y,text,fill=color)=>group.push('<text x="'+n(x)+'" y="'+n(y)+'" font-size="11" font-family="Arial,sans-serif" fill="'+fill+'" paint-order="stroke" stroke="var(--deep,#090b0e)" stroke-width="2" pointer-events="none">'+enc(text)+'</text>');
    const rect=(x1,y1,x2,y2,fill=style.fill,opacity=style.opacity,edge=color)=>group.push('<rect x="'+n(Math.min(x1,x2))+'" y="'+n(Math.min(y1,y2))+'" width="'+Math.max(1,n(Math.abs(x2-x1)))+'" height="'+Math.max(1,n(Math.abs(y2-y1)))+'" fill="'+fill+'" fill-opacity="'+opacity+'" stroke="'+edge+'" stroke-width="'+style.width+'" stroke-dasharray="'+dash+'" pointer-events="all"/>');
    const t=d.type;
-   if(['trend','ray','extended','arrow','ruler'].includes(t)){
+   if(renderAdvanced({d,a,b,c,right,bottom,line,label,rect,group,stroke,style,color,chart:this.chart,point:p=>this.point(p),n,xy,enc,round})){}
+   else if(['trend','ray','extended','arrow','ruler'].includes(t)){
     line(a,b,'',t==='ray'?'ray':t==='extended'?'extended':'segment');
     if(t==='arrow'){const ang=Math.atan2(b.y-a.y,b.x-a.x),size=11;group.push('<polygon points="'+xy(b)+' '+xy({x:b.x-size*Math.cos(ang-.5),y:b.y-size*Math.sin(ang-.5)})+' '+xy({x:b.x-size*Math.cos(ang+.5),y:b.y-size*Math.sin(ang+.5)})+'" fill="'+color+'"/>')}
     if(t==='ruler'){const q=rangeStats(d,this.chart.candles);rect(a.x,a.y,b.x,b.y);label(Math.min(a.x,b.x)+5,Math.min(a.y,b.y)-5,round(q.diff)+' ('+round(q.percent)+'%) · '+q.bars+' bars')}
@@ -235,7 +238,7 @@ export class DrawingLayer{
     else{rect(a.x,0,b.x,bottom);label(Math.min(a.x,b.x)+4,20,q.bars+' bars · '+round(q.seconds/60)+' min')}
    }
    if(active&&!this.lockAll&&!d.locked&&!freehand(t)&&this.tool==='pointer'){
-    const handles=one(t)?[['a',a]]:[['a',a],['b',b],...(c?[['c',c]]:[])];
+    const handles=one(t)?[['a',a]]:POINT_KEYS.filter(key=>d[key]).map(key=>[key,this.point(d[key])]).filter(([,q])=>q);
     for(const [key,q] of handles){group.push('<circle cx="'+n(q.x)+'" cy="'+n(q.y)+'" r="5" fill="#11141b" stroke="#b8cdff" stroke-width="2" data-handle="'+key+'" pointer-events="all"/><circle cx="'+n(q.x)+'" cy="'+n(q.y)+'" r="12" fill="transparent" data-handle="'+key+'" pointer-events="all"/>')}
    }
    group.push('</g>');parts.push(...group);

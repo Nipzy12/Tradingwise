@@ -7,16 +7,21 @@ const esc=x=>String(x??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 const click=id=>$(id)?.click();
 const rowHeight=24;
 function wheel(root,{items,selected,label,choose,open}){
- let signature='',values=[],current='',timer;
+ let signature='',values=[],current='',timer,armed=false;
+ const visible=()=>root.getClientRects().length>0&&root.clientHeight>0&&$('app').dataset.mobilePage==='chart';
+ function cancel(){clearTimeout(timer);armed=false}
  function settle(){
-  clearTimeout(timer);
+  if(!armed||!visible()){cancel();return}
+  cancel();
   const index=Math.max(0,Math.min(values.length-1,Math.round(root.scrollTop/rowHeight)));
   const value=values[index]; if(value&&value!==current)choose(value);
  }
- root.addEventListener('scroll',()=>{clearTimeout(timer);timer=setTimeout(settle,160)},{passive:true});
+ root.addEventListener('pointerdown',()=>{if(visible())armed=true},{passive:true});
+ root.addEventListener('wheel',()=>{if(visible())armed=true},{passive:true});
+ root.addEventListener('scroll',()=>{if(!armed||!visible())return;clearTimeout(timer);timer=setTimeout(settle,160)},{passive:true});
  root.addEventListener('click',event=>{
   const button=event.target.closest('[data-wheel-value]');if(!button)return;
-  clearTimeout(timer);const value=button.dataset.wheelValue;
+  cancel();const value=button.dataset.wheelValue;
   if(value===current)open();else choose(value);
  });
  root.addEventListener('keydown',e=>{
@@ -24,11 +29,12 @@ function wheel(root,{items,selected,label,choose,open}){
   if(e.key==='Enter'||e.key===' '){e.preventDefault();open();return}
   if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();const i=values.indexOf(current)+(e.key==='ArrowUp'?-1:1);if(values[i])choose(values[i])}
  });
- return {render(){
+ return {cancel,render(force=false){
+  if(!visible()){cancel();return}
   const next=items(),active=selected(),names=next.map(label);
   const key=JSON.stringify([next,active,names]);
-  if(key===signature)return;
-  signature=key; values=next;current=active;clearTimeout(timer);
+  if(key===signature&&!force)return;
+  signature=key; values=next;current=active;cancel();
   root.innerHTML=values.map((v,i)=>'<button type="button" role="option" tabindex="-1" data-wheel-value="'+esc(v)+'" aria-selected="'+(v===current)+'" class="'+(v===current?'selected':'')+'" title="'+esc(names[i])+'">'+esc(names[i])+'</button>').join('');
   root.scrollTop=Math.max(0,values.indexOf(current))*rowHeight;
  }};
@@ -37,7 +43,7 @@ export function mountMobileUI({state,chart,ui,drawingLayer,marketInfo,updateSymb
  let pairWheel,tfWheel,display=null,quote=null,quoteRequest=0,quoteAbort=null,lastSymbol='',installed=false,queued=false,previousMobile=false,fxCache=new Map();
  const prefs=()=>ui.exportPrefs();
  let page='chart',watchFilter='ALL',exploreProvider='BIQUOTE',exploreItems=[],exploreOffset=0,exploreTotal=0,exploreController=null,exploreSeq=0,exploreTimer=null,exploreLoading=false;
- let favoritesOpen=false;
+ const favoritesOpen=()=>prefs().showDrawingFavorites;
  const svg=id=>'<svg aria-hidden="true"><use href="#i-'+esc(id)+'"/></svg>';
  function updateWatchCount(){
   const rows=$('watchRows');if(!rows)return;let count=0;
@@ -46,7 +52,7 @@ export function mountMobileUI({state,chart,ui,drawingLayer,marketInfo,updateSymb
  }
  function renderToolStrip(){
   const bar=$('mobileToolFavorites'),ids=prefs().favorites.tools.filter(id=>TOOL_CATALOG[id]);
-  bar.classList.toggle('hidden',!favoritesOpen||page!=='chart');
+  bar.classList.toggle('hidden',!favoritesOpen()||page!=='chart');
   const mark='<button type="button" data-mobile-tool="pointer" title="Kursor" aria-label="Kursor">'+svg('pointer')+'</button>'+ids.map(id=>'<button type="button" data-mobile-tool="'+esc(id)+'" title="'+esc(TOOL_CATALOG[id].label)+'" aria-label="'+esc(TOOL_CATALOG[id].label)+'">'+svg(TOOL_CATALOG[id].icon.replace(/^i-/,''))+'</button>').join('')+'<button type="button" data-mobile-tool="all" title="Semua tool" aria-label="Semua tool">'+svg('grid')+'</button>';
   if(bar.dataset.markup!==mark){bar.dataset.markup=mark;bar.innerHTML=mark}
   bar.querySelectorAll('[data-mobile-tool]').forEach(b=>{b.classList.toggle('active',b.dataset.mobileTool===drawingLayer.tool);b.setAttribute('aria-pressed',String(b.dataset.mobileTool===drawingLayer.tool))});
@@ -105,13 +111,13 @@ export function mountMobileUI({state,chart,ui,drawingLayer,marketInfo,updateSymb
  function nav(name){document.querySelectorAll('[data-mobile-nav]').forEach(b=>{const active=b.dataset.mobileNav===name;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')})}
  function changePage(name,save=true){
   const next=shellRoute(name);if(page==='explore'&&name!=='explore'){exploreSeq++;exploreController?.abort();clearTimeout(exploreTimer)}
-  page=next.page;$('app').dataset.mobilePage=page;
+  pairWheel?.cancel();tfWheel?.cancel();page=next.page;$('app').dataset.mobilePage=page;
   $('mobileExplorePage').classList.toggle('hidden',page!=='explore');$('mobileMenuPage').classList.toggle('hidden',page!=='menu');
   $('app').classList.remove('mobile-focus');$('mobileChartToolbar').querySelector('[data-mobile-action="focus"]')?.setAttribute('aria-pressed','false');
   $('bottomPanel').classList.add('collapsed');
   if(next.sidebar){setRight(next.sidebar,true);$('rightTitle').textContent=next.sidebar==='watchlist'?'Daftar Pantau':next.sidebar==='objects'?'Object tree':'Alert';updateWatchCount()}
   else{$('rightbar').classList.remove('expanded');$('rightbar').classList.add('shrunk');if(save){ui.setLayout('sidebarCollapsed',true);ui.setLayout('panelCollapsed',true)}}
-  nav(next.tab);renderToolStrip();refreshMenu();if(page==='explore')void loadExplore();if(page==='chart'){requestAnimationFrame(()=>{chart.resize();pairWheel.render();tfWheel.render()})}
+  nav(next.tab);renderToolStrip();refreshMenu();if(page==='explore')void loadExplore();if(page==='chart'){requestAnimationFrame(()=>{chart.resize();pairWheel.render(true);tfWheel.render(true)})}
  }
  function showChart(save=true){changePage('chart',save)}
  function showSidebar(name){changePage(name)}
@@ -126,8 +132,8 @@ export function mountMobileUI({state,chart,ui,drawingLayer,marketInfo,updateSymb
   const shortcuts=[['indicatorsBtn','Indikator','activity'],['chartTypeBtn','Jenis chart','candles'],['compareBtn','Bandingkan','plus'],['alertBtn','Buat alert','bell'],['replayBtn','Bar replay','rewind'],['objects','Object tree','grid'],['pine','Pine Editor','activity'],['tester','Strategy Tester','chart'],['trade','Paper trading','candles'],['chartSettingsBtn','Pengaturan','settings']];
   const icons='<div class="mobile-analysis-grid">'+shortcuts.map(([id,label,ic])=>'<button type="button" data-hub-action="'+id+'">'+svg(ic)+'<span>'+label+'</span></button>').join('')+'</div>';
   const favorites=prefs().favorites.indicators.map(id=>CATALOG.find(c=>c.id===id)).filter(Boolean);
-  openModal('Pusat analisis','<div id="analysisHub">'+icons+'<div class="mobile-hub-heading">Indikator favorit</div>'+(favorites.length?favorites.map(c=>'<button type="button" class="mobile-hub-indicator" data-hub-indicator="'+esc(c.id)+'"><span>'+esc(c.name)+'</span><strong>'+(state.enabled.includes(c.id)?'Aktif ✓':'+ Tambah')+'</strong></button>').join(''):'<p class="settings-note">Beri bintang indikator untuk akses cepat.</p>')+'<div class="mobile-hub-heading">Drawing</div><button type="button" class="mobile-hub-indicator" data-hub-action="drawing"><span>Drawing Studio</span><strong>›</strong></button><button type="button" class="mobile-hub-indicator" data-hub-action="toolstrip"><span>Toolbar drawing favorit</span><strong>'+(favoritesOpen?'Aktif':'Tampilkan')+'</strong></button></div>',root=>{
-   root.onclick=e=>{const indicator=e.target.closest('[data-hub-indicator]');if(indicator){toggleIndicator(indicator.dataset.hubIndicator);analysis();return}const b=e.target.closest('[data-hub-action]');if(!b)return;const id=b.dataset.hubAction;closeModal();if(id==='drawing')drawings();else if(id==='toolstrip'){favoritesOpen=!favoritesOpen;renderToolStrip()}else menuAction(id)};
+  openModal('Pusat analisis','<div id="analysisHub">'+icons+'<div class="mobile-hub-heading">Indikator favorit</div>'+(favorites.length?favorites.map(c=>'<button type="button" class="mobile-hub-indicator" data-hub-indicator="'+esc(c.id)+'"><span>'+esc(c.name)+'</span><strong>'+(state.enabled.includes(c.id)?'Aktif ✓':'+ Tambah')+'</strong></button>').join(''):'<p class="settings-note">Beri bintang indikator untuk akses cepat.</p>')+'<div class="mobile-hub-heading">Drawing</div><button type="button" class="mobile-hub-indicator" data-hub-action="drawing"><span>Drawing Studio</span><strong>›</strong></button><button type="button" class="mobile-hub-indicator" data-hub-action="toolstrip"><span>Toolbar drawing favorit</span><strong>'+(favoritesOpen()?'Aktif':'Tampilkan')+'</strong></button></div>',root=>{
+   root.onclick=e=>{const indicator=e.target.closest('[data-hub-indicator]');if(indicator){toggleIndicator(indicator.dataset.hubIndicator);analysis();return}const b=e.target.closest('[data-hub-action]');if(!b)return;const id=b.dataset.hubAction;closeModal();if(id==='drawing')drawings();else if(id==='toolstrip'){ui.setDrawingFavoritesVisible(!favoritesOpen());renderToolStrip()}else menuAction(id)};
   })
  }
  function listModal(title,items){openModal(title,'<div class="modal-list mobile-menu-list">'+items.map((it,i)=>'<button type="button" class="modal-symbol" data-mobile-menu="'+i+'"><strong>'+esc(it[0])+'</strong><span class="right-tag">›</span></button>').join('')+'</div>',root=>{root.onclick=e=>{const b=e.target.closest('[data-mobile-menu]');if(!b)return;const item=items[Number(b.dataset.mobileMenu)];if(item){closeModal();item[1]()}}})}

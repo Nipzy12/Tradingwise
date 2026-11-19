@@ -9,7 +9,7 @@ export const DEFAULT_UI_PREFS=Object.freeze({
  favorites:{
   symbols:['BIQUOTE:XAUUSD','BINANCE:BTCUSDT'],
   timeframes:['5m','15m','1h','4h','1d'],
-  tools:['trend','horizontal','rectangle'],
+  tools:[],
   indicators:['ema9','ema21']
  },
  settings:{
@@ -54,6 +54,8 @@ export function normalizeUiPreferences(input={}){
    upColor:color(settings.upColor,defaults.settings.upColor),
    downColor:color(settings.downColor,defaults.settings.downColor)
   },
+  drawingFavoritesVersion:1,
+  showDrawingFavorites:bool(raw.showDrawingFavorites,false),
   watchlistSort:['manual','symbol','favorites','change'].includes(raw.watchlistSort)?raw.watchlistSort:'manual',
   showFavoritesBar:bool(raw.showFavoritesBar,true),
   panelCollapsed:bool(raw.panelCollapsed,true),
@@ -61,7 +63,10 @@ export function normalizeUiPreferences(input={}){
  };
 }
 export function readUiPreferences(storage){
- try{return normalizeUiPreferences(JSON.parse(storage?.getItem(UI_PREF_KEY)||'{}'))}
+ try{const raw=JSON.parse(storage?.getItem(UI_PREF_KEY)||'{}');
+  // Older releases prefilled these exact three items. Other saved lists are retained.
+  if(raw&&raw.drawingFavoritesVersion!==1&&JSON.stringify(raw.favorites?.tools)===JSON.stringify(['trend','horizontal','rectangle'])){raw.favorites.tools=[];const migrated=normalizeUiPreferences(raw);try{storage?.setItem(UI_PREF_KEY,JSON.stringify(migrated))}catch{}return migrated}
+  return normalizeUiPreferences(raw)}
  catch{return normalizeUiPreferences()}
 }
 export function writeUiPreferences(storage,data){

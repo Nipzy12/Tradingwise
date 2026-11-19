@@ -5,8 +5,16 @@ export const TOOL_GROUPS = [
  ['Fibonacci',[['fibo','Fib retracement','i-fibo',2],['fibExtension','Trend-based Fib extension','i-fibo',3]]],
  ['Bentuk & anotasi',[['rectangle','Rectangle / zona','i-rectangle',2],['ellipse','Ellipse','i-rectangle',2],['triangle','Triangle','i-rectangle',3],['brush','Brush','i-trend',2],['highlighter','Highlighter','i-trend',2],['text','Text / catatan','i-text',1],['priceLabel','Price label','i-text',1]]],
  ['Risk & measurement',[['long','Long position','i-trend',2],['short','Short position','i-trend',2],['ruler','Date & price range','i-ruler',2],['priceRange','Price range','i-ruler',2],['dateRange','Date range','i-ruler',2]]],
- ['SMC / ICT manual',[['obZone','Order block zone','i-rectangle',2],['fvgZone','Fair value gap zone','i-rectangle',2],['liquidity','Liquidity level','i-horizontal',1]]]
+ ['SMC / ICT manual',[['obZone','Order block zone','i-rectangle',2],['fvgZone','Fair value gap zone','i-rectangle',2],['liquidity','Liquidity level','i-horizontal',1]]],
+ ["Trend lanjutan",[["infoLine","Info line","i-trend",2],["trendAngle","Trend angle","i-trend",2],["regression","Regression trend","i-trend",2],["flatChannel","Flat top/bottom channel","i-trend",3],["disjointChannel","Disjoint channel","i-trend",4],["pitchfork","Pitchfork","i-trend",3],["schiffPitchfork","Schiff pitchfork","i-trend",3],["modifiedSchiff","Modified Schiff pitchfork","i-trend",3],["insidePitchfork","Inside pitchfork","i-trend",3]]],
+ ["Fibonacci & Gann lanjutan",[["fibChannel","Fib channel","i-fibo",3],["fibTime","Fib time zone","i-fibo",2],["fibFan","Fib speed resistance fan","i-fibo",2],["fibTrendTime","Trend-based Fib time","i-fibo",3],["fibCircle","Fib circles","i-fibo",2],["fibArc","Fib arcs","i-fibo",2],["fibWedge","Fib wedge","i-fibo",3],["gannBox","Gann box (normalized grid)","i-grid",2],["gannFan","Gann fan (anchor-relative)","i-fibo",2]]],
+ ["Motif manual",[["xabcd","XABCD pattern","i-trend",5],["cypher","Cypher pattern","i-trend",5],["headShoulders","Head and shoulders","i-trend",7],["abcd","ABCD pattern","i-trend",4],["trianglePattern","Triangle pattern","i-trend",3],["threeDrives","Three drives","i-trend",6],["elliottImpulse","Elliott impulse wave","i-trend",6],["elliottCorrection","Elliott corrective wave","i-trend",4],["elliottTriangle","Elliott triangle wave","i-trend",6],["elliottDouble","Elliott double combination","i-trend",4],["elliottTriple","Elliott triple combination","i-trend",6],["cycleLines","Cycle lines","i-vertical",2],["timeCycles","Time cycles","i-vertical",2],["sineWave","Sine wave","i-trend",2]]],
+ ["Proyeksi",[["forecast","Forecast (manual)","i-trend",2],["sector","Sector","i-rectangle",3],["anchoredVwap","Anchored VWAP","i-trend",1],["fixedVolume","Fixed range volume profile (estimated)","i-grid",2],["anchoredVolume","Anchored volume profile (estimated)","i-grid",1],["datePriceRange","Date and price range","i-ruler",2]]],
+ ["Bentuk lanjutan",[["arrowMarker","Arrow marker","i-trend",2],["arrowUp","Up arrow","i-trend",1],["arrowDown","Down arrow","i-trend",1],["rotatedRectangle","Rotated rectangle","i-rectangle",3],["path","Path (4 anchors)","i-trend",4],["circle","Circle","i-rectangle",2],["polyline","Polyline (5 anchors)","i-trend",5],["arc","Arc (quadratic)","i-trend",3],["curve","Curve (quadratic)","i-trend",3],["doubleCurve","Double curve","i-trend",5]]],
+ ["Anotasi lanjutan",[["note","Note","i-text",1],["priceNote","Price note","i-text",1],["pin","Pin","i-text",1],["label","Label","i-text",1],["comment","Comment","i-text",1],["signpost","Signpost","i-text",1],["flag","Flag","i-text",1],["idea","Idea (local note)","i-text",1]]],
+ ["Visual lokal",[["emoji","Emoji","i-text",1],["sticker","Sticker (local glyph)","i-text",1],["visualIcon","Icon (local glyph)","i-text",1]]]
 ];
+export const POINT_KEYS=['a','b','c','d','e','f','g'];
 export const TOOL_CATALOG=Object.fromEntries(TOOL_GROUPS.flatMap(([group,tools])=>tools.map(([id,label,icon,points])=>[id,{id,label,icon,points,group}])));
 export const TOOL_IDS=Object.keys(TOOL_CATALOG).filter(id=>TOOL_CATALOG[id].points>0);
 export const DEFAULT_FIB=[0,.236,.382,.5,.618,.705,.786,1];
@@ -68,7 +76,7 @@ export function normalizeDrawing(d,candles=[]){
  if(!d||!TOOL_IDS.includes(d.type))return null;
  const a=normalizeAnchor(candles,d.a),b=normalizeAnchor(candles,d.b||d.a);if(!a||!b)return null;
  const out={id:String(d.id||globalThis.crypto?.randomUUID?.()||Date.now()+Math.random()).slice(0,80),type:d.type,a,b,style:normalizeStyle(d.type,d.style),text:String(d.text??'').slice(0,200),locked:d.locked===true,hidden:d.hidden===true};
- if(TOOL_CATALOG[d.type].points===3){out.c=normalizeAnchor(candles,d.c);if(!out.c)return null}
+ for(const k of POINT_KEYS.slice(2,TOOL_CATALOG[d.type].points)){out[k]=normalizeAnchor(candles,d[k]);if(!out[k])return null}
  if(['long','short'].includes(d.type)){
   out.risk=normalizeRisk(d.risk);out.c=normalizeAnchor(candles,d.c);
   if(!out.c){Object.assign(out,seedPosition(d.type,a,b,candles))}
@@ -85,7 +93,7 @@ export function normalizeDrawing(d,candles=[]){
 export function shiftDrawing(d,candles,deltaLogical,deltaPrice){
  const out=clone(d);
  const move=p=>{const l=logicalAt(candles,p.time,p.logical)+deltaLogical;return anchor(candles,l,p.price+deltaPrice)};
- for(const k of ['a','b','c'])if(out[k])out[k]=move(out[k]);
+ for(const k of POINT_KEYS)if(out[k])out[k]=move(out[k]);
  if(out.points)out.points=out.points.map(move);
  return out;
 }
