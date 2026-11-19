@@ -2,7 +2,7 @@ import {TOOL_CATALOG,clone,normalizeStyle,normalizeDrawing,normalizeRisk,normali
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const isPosition=t=>t==='long'||t==='short';
 const isBrush=t=>t==='brush'||t==='highlighter';
-const tf=t=>{if(!Number.isFinite(t))return '';const d=new Date(t*1000);return Number.isFinite(d.getTime())?d.toISOString().slice(0,16):''};
+const tf=t=>{if(!Number.isFinite(t))return '';const d=new Date(t*1000);return Number.isFinite(d.getTime())?d.toISOString().slice(0,19):''};
 const summary=d=>{const s=positionStats(d);return s?'RR 1:'+s.rr.toFixed(2)+' · Risk '+s.budget.toFixed(2)+' · Qty/lot '+s.qty.toLocaleString('en-US',{maximumFractionDigits:8})+' · TP P/L '+s.targetPnL.toFixed(2):'Posisi tidak valid: TP dan SL harus di sisi berlawanan dari entry.'};
 export function openDrawingProperties(layer,id,{openModal,closeModal,toast}){
  const live=layer.drawings.find(x=>x.id===id);if(!live)return;
@@ -11,7 +11,7 @@ export function openDrawingProperties(layer,id,{openModal,closeModal,toast}){
  const checkbox=(title,key,value)=>'<label><span>'+title+'</span><input data-setting="'+key+'" type="checkbox" '+(value?'checked':'')+'></label>';
  const points=isBrush(t)?'<p class="settings-note">Brush bisa digeser sebagai satu objek.</p>':['a','b','c'].filter(k=>d[k]&&(TOOL_CATALOG[t].points!==1||k==='a')).map(k=>{
    const name=isPosition(t)?({a:'Entry',b:'Take profit',c:'Stop loss'})[k]:'Titik '+({a:'1',b:'2',c:'3'})[k];
-   return '<div class="drawing-coordinate"><strong>'+name+'</strong>'+field('Harga asli','price-'+k,d[k].price,'type="number" step="any" required')+field('Waktu (UTC)','time-'+k,tf(d[k].time),'type="datetime-local" required')+'</div>';
+   return '<div class="drawing-coordinate"><strong>'+name+'</strong>'+field('Harga asli','price-'+k,d[k].price,'type="number" step="any" required')+field('Waktu (UTC)','time-'+k,tf(d[k].time),'type="datetime-local" step="1" required')+'</div>';
  }).join('');
  const fib=['fibo','fibExtension'].includes(t)?'<div class="drawing-form-section"><h4>Fibonacci</h4>'+field('Level (pisahkan koma)','levels',normalizeLevels(d.levels,t).join(', '))+'</div>':'';
  const rr=isPosition(t)?'<div class="drawing-form-section"><h4>Risk / Reward</h4>'+field('Saldo (quote asli)','balance',risk.balance,'type="number" min="0" step="any"')+field('Risk (%)','riskPercent',risk.percent,'type="number" min="0" max="100" step="any"')+field('Contract size (unit/lot)','contract',risk.contract,'type="number" min="0.00000001" step="any"')+'<div class="drawing-risk-summary" id="drawingRiskSummary">'+esc(summary(d))+'</div><p class="settings-note">Saldo/risk dalam mata uang quote asli. Ukuran lot adalah estimasi tanpa spread, fee, margin, dan batas lot broker. Contract size harus disesuaikan instrumen/broker.</p></div>':'';
@@ -26,7 +26,7 @@ export function openDrawingProperties(layer,id,{openModal,closeModal,toast}){
    const result=clone(d);result.style=normalizeStyle(t,{color:val('color'),fill:val('fill'),width:Number(val('width')),opacity:Number(val('opacity')),dash:val('dash'),extend:checked('extend')});
    result.text=val('text')||'';result.locked=checked('locked');result.hidden=checked('hidden');
    for(const k of ['a','b','c'])if(el('price-'+k)){
-    const price=Number(val('price-'+k)),time=Date.parse(val('time-'+k)+'Z')/1000;
+    const price=Number(val('price-'+k)),time=val('time-'+k)===tf(d[k].time)?d[k].time:Date.parse(val('time-'+k)+'Z')/1000;
     if(!Number.isFinite(price)||!Number.isFinite(time))throw Error('Koordinat harga/waktu tidak valid');
     result[k]={...result[k],price,time};
    }

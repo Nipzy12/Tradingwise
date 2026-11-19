@@ -11,6 +11,7 @@ const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 const labelTf=t=>({ '1h':'1H','2h':'2H','4h':'4H','1d':'D','1w':'W' })[t]||t;
 const TOOLS=Object.fromEntries(Object.values(TOOL_CATALOG).filter(t=>t.points>0).map(t=>[t.id,[t.label,t.icon]]));
 const icon=id=>'<svg><use href="#'+esc(id)+'"/></svg>';
+const fill=(node,markup)=>{if(node.dataset.rendered!==markup){node.dataset.rendered=markup;node.innerHTML=markup}};
 
 export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,toast,persist,renderWatchlist,updateSymbol,updateTF,toggleIndicator,openModal,closeModal}){
  let prefs=readUiPreferences(localStorage);
@@ -34,15 +35,15 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
    b.hidden=!current('timeframes',b.dataset.tf)&&b.dataset.tf!==state.tf;
   });
   const root=el('favoritesBar');if(!root)return;
-  el('favoriteSymbols').innerHTML=prefs.favorites.symbols.map(id=>{
+  fill(el('favoriteSymbols'),prefs.favorites.symbols.map(id=>{
    const info=marketInfo(id);return '<button class="favorite-chip'+(id===state.symbol?' active':'')+'" data-quick-symbol="'+esc(id)+'" title="'+esc(info.name||id)+'">'+esc(info.symbol||id)+'</button>';
-  }).join('')||'<span class="favorite-bar-caption">Klik ☆ untuk pin simbol</span>';
-  el('favoriteTools').innerHTML=prefs.favorites.tools.map(id=>{
+  }).join('')||'<span class="favorite-bar-caption">Klik ☆ untuk pin simbol</span>');
+  fill(el('favoriteTools'),prefs.favorites.tools.map(id=>{
    const name=TOOLS[id]?.[0]||id;return '<button class="favorite-chip favorite-tool-chip'+(drawingLayer.tool===id?' active':'')+'" data-quick-tool="'+esc(id)+'" title="'+esc(name)+'">'+icon(TOOLS[id]?.[1]||'i-pointer')+'</button>';
-  }).join('')||'<span class="favorite-bar-caption">Pin tool dari toolbar</span>';
-  el('favoriteIndicators').innerHTML=prefs.favorites.indicators.map(id=>{
+  }).join('')||'<span class="favorite-bar-caption">Pin tool dari toolbar</span>');
+  fill(el('favoriteIndicators'),prefs.favorites.indicators.map(id=>{
    const item=CATALOG.find(x=>x.id===id);return '<button class="favorite-chip'+(state.enabled.includes(id)?' active':'')+'" data-quick-indicator="'+esc(id)+'" title="'+esc(item?.name||id)+'">'+esc(id==='smc-entry-pro-v5'?'SMC':id.toUpperCase())+'</button>';
-  }).join('')||'<span class="favorite-bar-caption">Pin indikator dari menu</span>';
+  }).join('')||'<span class="favorite-bar-caption">Pin indikator dari menu</span>');
   window.dispatchEvent(new Event('tw:ui-render'));
  }
  function favorite(kind,value){
