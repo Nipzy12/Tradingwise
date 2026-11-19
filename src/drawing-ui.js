@@ -3,7 +3,7 @@ const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 const isPosition=t=>t==='long'||t==='short';
 const isBrush=t=>t==='brush'||t==='highlighter';
 const tf=t=>{if(!Number.isFinite(t))return '';const d=new Date(t*1000);return Number.isFinite(d.getTime())?d.toISOString().slice(0,19):''};
-const summary=d=>{const s=positionStats(d);return s?'RR 1:'+s.rr.toFixed(2)+' · Risk '+s.budget.toFixed(2)+' · Qty/lot '+s.qty.toLocaleString('en-US',{maximumFractionDigits:8})+' · TP P/L '+s.targetPnL.toFixed(2):'Posisi tidak valid: TP dan SL harus di sisi berlawanan dari entry.'};
+const summary=d=>{const s=positionStats(d);return s?'RR 1:'+s.rr.toFixed(2)+' · Risk '+s.budget.toFixed(2)+' · Qty/lot '+s.qty.toLocaleString('en-US',{maximumFractionDigits:8})+' · TP P/L '+s.targetPnL.toFixed(2)+' · SL P/L '+s.stopPnL.toFixed(2)+' · Saldo TP '+s.targetBalance.toFixed(2)+' · Saldo SL '+s.stopBalance.toFixed(2):'Posisi tidak valid: TP dan SL harus di sisi berlawanan dari entry.'};
 export function openDrawingProperties(layer,id,{openModal,closeModal,toast}){
  const live=layer.drawings.find(x=>x.id===id);if(!live)return;
  const d=clone(live),s=normalizeStyle(d.type,d.style),risk=normalizeRisk(d.risk),t=d.type;
