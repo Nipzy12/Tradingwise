@@ -13,6 +13,8 @@ export function storeMarketInfo(items){for(const x of items){if(!x?.id)continue;
 export function displayNum(v,id){if(!Number.isFinite(Number(v)))return '–';const n=Number(v),symbol=marketInfo(id).symbol;const precision=/^(EUR|GBP|AUD|NZD|USD|CAD|CHF|JPY)/.test(symbol)&&n<10?5:n<1?6:n<10?4:n<100?3:2;return n.toLocaleString('en-US',{minimumFractionDigits:precision,maximumFractionDigits:precision})}
 const readJson=async (url,{signal}={})=>{const response=await fetch(url,{signal,cache:'no-store',headers:{accept:'application/json'}});const payload=await response.json().catch(()=>({}));if(!response.ok)throw Error(payload.error||`Backend HTTP ${response.status}`);return payload};
 export async function searchSymbols({provider='ALL',q='',limit=70,offset=0,signal}={}){
+ const prefixed=/^(BINANCE|BIQUOTE):(.+)$/i.exec(q.trim());if(prefixed&&(provider==='ALL'||provider===prefixed[1].toUpperCase())){provider=prefixed[1].toUpperCase();q=prefixed[2].trim()}
+
  if(provider==='CTRADER'){const data=await ctraderSymbols({q,limit,offset});storeMarketInfo(data.items||[]);return data}
  if(EDGE_ORIGIN&&provider==='BINANCE'){
   try{const data=await binanceSearch(q,limit,offset);storeMarketInfo(data.items);return data}

@@ -4,17 +4,14 @@ import {
  readUiPreferences, writeUiPreferences, normalizeUiPreferences,
  toggleFavorite, hasFavorite, orderWatchlist, TIMEFRAMES, DEFAULT_UI_PREFS
 } from './ui-preferences.js';
+import {TOOL_GROUPS,TOOL_CATALOG} from './drawing-model.js';
 
 const el=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const labelTf=t=>({ '1h':'1H','2h':'2H','4h':'4H','1d':'D','1w':'W' })[t]||t;
-const TOOLS={
- trend:['Garis tren','i-trend'],horizontal:['Garis horizontal','i-horizontal'],
- vertical:['Garis vertikal','i-vertical'],rectangle:['Zona / Rectangle','i-rectangle'],
- fibo:['Fibonacci','i-fibo'],text:['Teks','i-text'],
- long:['Long position','i-trend'],short:['Short position','i-trend'],ruler:['Ruler','i-ruler']
-};
+const TOOLS=Object.fromEntries(Object.values(TOOL_CATALOG).filter(t=>t.points>0).map(t=>[t.id,[t.label,t.icon]]));
 const icon=id=>'<svg><use href="#'+esc(id)+'"/></svg>';
+const fill=(node,markup)=>{if(node.dataset.rendered!==markup){node.dataset.rendered=markup;node.innerHTML=markup}};
 
 export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,toast,persist,renderWatchlist,updateSymbol,updateTF,toggleIndicator,openModal,closeModal}){
  let prefs=readUiPreferences(localStorage);
@@ -38,15 +35,15 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
    b.hidden=!current('timeframes',b.dataset.tf)&&b.dataset.tf!==state.tf;
   });
   const root=el('favoritesBar');if(!root)return;
-  el('favoriteSymbols').innerHTML=prefs.favorites.symbols.map(id=>{
+  fill(el('favoriteSymbols'),prefs.favorites.symbols.map(id=>{
    const info=marketInfo(id);return '<button class="favorite-chip'+(id===state.symbol?' active':'')+'" data-quick-symbol="'+esc(id)+'" title="'+esc(info.name||id)+'">'+esc(info.symbol||id)+'</button>';
-  }).join('')||'<span class="favorite-bar-caption">Klik ☆ untuk pin simbol</span>';
-  el('favoriteTools').innerHTML=prefs.favorites.tools.map(id=>{
+  }).join('')||'<span class="favorite-bar-caption">Klik ☆ untuk pin simbol</span>');
+  fill(el('favoriteTools'),prefs.favorites.tools.map(id=>{
    const name=TOOLS[id]?.[0]||id;return '<button class="favorite-chip favorite-tool-chip'+(drawingLayer.tool===id?' active':'')+'" data-quick-tool="'+esc(id)+'" title="'+esc(name)+'">'+icon(TOOLS[id]?.[1]||'i-pointer')+'</button>';
-  }).join('')||'<span class="favorite-bar-caption">Pin tool dari toolbar</span>';
-  el('favoriteIndicators').innerHTML=prefs.favorites.indicators.map(id=>{
+  }).join('')||'<span class="favorite-bar-caption">Pin tool dari toolbar</span>');
+  fill(el('favoriteIndicators'),prefs.favorites.indicators.map(id=>{
    const item=CATALOG.find(x=>x.id===id);return '<button class="favorite-chip'+(state.enabled.includes(id)?' active':'')+'" data-quick-indicator="'+esc(id)+'" title="'+esc(item?.name||id)+'">'+esc(id==='smc-entry-pro-v5'?'SMC':id.toUpperCase())+'</button>';
-  }).join('')||'<span class="favorite-bar-caption">Pin indikator dari menu</span>';
+  }).join('')||'<span class="favorite-bar-caption">Pin indikator dari menu</span>');
   window.dispatchEvent(new Event('tw:ui-render'));
  }
  function favorite(kind,value){
@@ -61,6 +58,26 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
   const query=q.toLowerCase().trim();
   const items=prefs.favorites.symbols.map(id=>marketInfo(id)).filter(x=>(x.symbol+' '+x.name+' '+x.provider).toLowerCase().includes(query));
   return {items,total:items.length,counts:{},errors:{}};
+ }
+ function drawingToolsModal(){
+  openModal('Drawing Studio','<div class="drawing-palette"><input type="search" id="drawingToolSearch" placeholder="Cari tool, mis. trend, FVG, Fibonacci..." aria-label="Cari drawing tools"><div class="drawing-mode-controls"><label>Magnet <select id="drawingMagnetMode"><option value="off">Off</option><option value="weak">Weak</option><option value="strong">Strong</option></select></label><button type="button" id="drawingKeepToggle">Keep drawing</button><button type="button" id="drawingLockToggle">Lock all</button><button type="button" id="drawingHideToggle">Hide all</button></div><div id="drawingToolList"></div><p class="settings-note">Pilih tool, ketuk titik atau drag pada chart. Tool favorit tersedia di toolbar. Pilih objek untuk menggeser atau mengubah propertinya.</p></div>',root=>{
+   const search=el('drawingToolSearch'),list=el('drawingToolList'),mag=el('drawingMagnetMode');mag.value=drawingLayer.magnetMode;
+   function modeControls(){for(const [id,active] of [['drawingKeepToggle',drawingLayer.keepDrawing],['drawingLockToggle',drawingLayer.lockAll],['drawingHideToggle',drawingLayer.hidden]]){const btn=el(id);btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))}}
+   function paint(){
+    const query=search.value.toLowerCase().trim(),pins=prefs.favorites.tools;
+    const matches=t=>(t.label+' '+t.id+' '+t.group).toLowerCase().includes(query);
+    const toolRow=t=>'<div class="drawing-tool-row"><button type="button" data-draw-pick="'+esc(t.id)+'" class="'+(drawingLayer.tool===t.id?'active':'')+'">'+icon(t.icon)+'<span>'+esc(t.label)+'</span><small>'+(t.points===0?'Mode':t.id==='brush'||t.id==='highlighter'?'Drag':t.points+' titik')+'</small></button>'+(t.points>0?'<button type="button" class="drawing-pin'+(current('tools',t.id)?' is-favorite':'')+'" data-draw-pin="'+esc(t.id)+'" aria-label="Favorit '+esc(t.label)+'">'+(current('tools',t.id)?'★':'☆')+'</button>':'')+'</div>';
+    const groups=[['Favorit',pins.map(id=>TOOL_CATALOG[id]).filter(Boolean)],...TOOL_GROUPS.map(([label,items])=>[label,items.map(x=>TOOL_CATALOG[x[0]])])];
+    list.innerHTML=groups.map(([label,items])=>{const visible=items.filter(matches);return visible.length?'<section class="drawing-category"><h3>'+esc(label)+'</h3>'+visible.map(toolRow).join('')+'</section>':''}).join('')||'<div class="side-info">Tool tidak ditemukan.</div>';
+   }
+   search.oninput=paint;
+   list.onclick=e=>{const pin=e.target.closest('[data-draw-pin]'),pick=e.target.closest('[data-draw-pick]');if(pin){favorite('tools',pin.dataset.drawPin);paint()}else if(pick){closeModal();drawingLayer.setTool(pick.dataset.drawPick);render()}};
+   mag.onchange=()=>drawingLayer.setMagnet(mag.value);
+   el('drawingKeepToggle').onclick=()=>{drawingLayer.keepDrawing=!drawingLayer.keepDrawing;drawingLayer.syncControls();modeControls()};
+   el('drawingLockToggle').onclick=()=>{drawingLayer.lockAll=!drawingLayer.lockAll;drawingLayer.syncControls();drawingLayer.render();modeControls()};
+   el('drawingHideToggle').onclick=()=>{drawingLayer.hidden=!drawingLayer.hidden;drawingLayer.syncControls();drawingLayer.render();modeControls()};
+   modeControls();paint();
+  });
  }
  function timeframesModal(){
   const html='<p class="settings-note">Klik interval untuk memilih. Klik bintang untuk menampilkan atau menyembunyikannya di toolbar.</p><div class="modal-list">'+TIMEFRAMES.map(tf=>{
@@ -176,6 +193,8 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
  }
  function install(){
   el('symbolFavoriteBtn').onclick=()=>favorite('symbols',state.symbol);
+  el('drawingToolsBtn').onclick=drawingToolsModal;
+  window.addEventListener('tw:draw-tool',()=>{render()});
   el('tfMoreBtn').onclick=timeframesModal;
   el('chartSettingsBtn').onclick=chartSettingsModal;
   el('favoritesManageBtn').onclick=favoritesModal;
@@ -201,7 +220,7 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
  }
  return {
   install,render,apply,hasFavorite:current,toggleFavorite:favorite,
-  orderWatchlist:order,favoriteCatalog,timeframesModal,chartSettingsModal,watchlistSettings,favoritesModal,
+  orderWatchlist:order,favoriteCatalog,drawingToolsModal,timeframesModal,chartSettingsModal,watchlistSettings,favoritesModal,
   setLayout,importPrefs,exportPrefs:()=>normalizeUiPreferences(prefs),
   setChartPreference(key,value){if(key in prefs.settings){prefs.settings[key]=value;save();apply()}},
   get panelCollapsed(){return prefs.panelCollapsed},

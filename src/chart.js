@@ -1,4 +1,5 @@
 import {displayNum} from './market.js';
+import {CHART_TYPES,displayCandles,toSeriesData} from './chart-display.js';
 const $=id=>document.getElementById(id);
 const themes={dark:{background:'#090b0e',grid:'#1c2026',minor:'#171a20',text:'#959ba7',up:'#089981',down:'#f23645',line:'#5580f6',cursor:'#8d9cbd'},light:{background:'#ffffff',grid:'#eff2f6',minor:'#f4f6f9',text:'#7b8698',up:'#079d81',down:'#e75267',line:'#416def',cursor:'#a0aabc'}};
 export class ChartEngine{
@@ -9,7 +10,7 @@ export class ChartEngine{
  }
  setCandles(candles,{fit=true}={}){this.candles=candles;this.engine.setCandles(candles,fit);}
  setLines(lines){this.lines=lines;this.engine.setLines(lines)}
- setType(type){this.type=type;this.engine.setType(type);if(this.priceDisplay)this.engine.setPriceDisplay?.()}
+ setType(type){this.type=CHART_TYPES.includes(type)?type:'candles';this.engine.setType(this.type);if(this.priceDisplay)this.engine.setPriceDisplay?.()}
  setPriceDisplay(display){this.priceDisplay=display;this.engine.setPriceDisplay?.();}
  formatPrice(value){const n=Number(value);if(!Number.isFinite(n))return '–';return this.priceDisplay?this.priceDisplay.format(n):displayNum(n,this.getSymbol())}
  autoScale(){this.engine.autoScale?.();}
@@ -35,7 +36,7 @@ class LWChart{
   this.chart.subscribeCrosshairMove(p=>{if(!p?.time){this.outer.onMove?.(null);return}const bar=this.outer.candles.find(c=>c.time===p.time);this.outer.onMove?.(bar||null)});
   this.chart.timeScale().subscribeVisibleLogicalRangeChange(()=>this.onVisible?.());
  }
- setCandles(candles,fit){const d=candles.map(({time,open,high,low,close})=>({time,open,high,low,close}));this.main.setData(d);if(fit)this.showLast(140);}
+ setCandles(candles,fit){const d=toSeriesData(candles,this.outer.type);this.main.setData(d);if(fit)this.showLast(140);}
  setLines(lines){
   const L=window.LightweightCharts;
   for(const s of this.series){try{this.chart.removeSeries(s)}catch{}}
@@ -55,9 +56,19 @@ class LWChart{
   }
   try{if(this.chart.panes().length>1){for(let i=1;i<this.chart.panes().length;i++)this.chart.panes()[i].setHeight(100)}}catch{}
  }
- setType(type){const L=window.LightweightCharts;try{this.chart.removeSeries(this.main)}catch{}this.main=this.chart.addSeries(type==='line'?L.LineSeries:type==='area'?L.AreaSeries:L.CandlestickSeries,type==='candles'?{upColor:themes[this.outer.theme].up,downColor:themes[this.outer.theme].down,borderVisible:false,wickUpColor:themes[this.outer.theme].up,wickDownColor:themes[this.outer.theme].down}:{color:'#6e97fa',lineColor:'#628dfc',topColor:'#4167b075',bottomColor:'#42517a10',lineWidth:2});this.setCandles(this.outer.candles,false);this.setPreferences(this.outer.preferences);}
- setTheme(theme){const t=themes[theme];this.chart.applyOptions({layout:{background:{type:'solid',color:t.background},textColor:t.text},grid:{vertLines:{color:t.grid},horzLines:{color:t.grid}},rightPriceScale:{borderColor:t.grid},timeScale:{borderColor:t.grid}});if(this.outer.type==='candles')this.main.applyOptions({upColor:t.up,downColor:t.down,wickUpColor:t.up,wickDownColor:t.down});}
- setPreferences(p){const t=themes[this.outer.theme],L=window.LightweightCharts;this.chart.applyOptions({grid:{vertLines:{visible:p.grid,color:t.grid},horzLines:{visible:p.grid,color:t.grid}},crosshair:{vertLine:{visible:p.crosshair},horzLine:{visible:p.crosshair}},timeScale:{barSpacing:p.barSpacing,rightOffset:p.rightOffset},rightPriceScale:{mode:({normal:L.PriceScaleMode?.Normal??0,logarithmic:L.PriceScaleMode?.Logarithmic??1,percentage:L.PriceScaleMode?.Percentage??2})[p.priceScale]??0}});this.main.applyOptions({priceLineVisible:p.lastPrice,lastValueVisible:p.lastPrice,...(this.outer.type==='candles'?{upColor:p.upColor,downColor:p.downColor,wickUpColor:p.upColor,wickDownColor:p.downColor}:{})});}
+ setType(type){
+  const L=window.LightweightCharts,p=this.outer.preferences,ohlc=type==='candles'||type==='heikin';
+  const range=this.chart.timeScale().getVisibleLogicalRange();
+  const series=type==='line'?L.LineSeries:type==='area'?L.AreaSeries:type==='bars'?L.BarSeries:L.CandlestickSeries;
+  const options=ohlc?{upColor:p.upColor,downColor:p.downColor,borderVisible:false,wickUpColor:p.upColor,wickDownColor:p.downColor}:type==='bars'?{upColor:p.upColor,downColor:p.downColor,openVisible:true,thinBars:true}:type==='area'?{lineColor:'#628dfc',topColor:'#4167b075',bottomColor:'#42517a10',lineWidth:2}:{color:'#6e97fa',lineWidth:2};
+  // Add before removing, so the time scale does not collapse mid-switch.
+  const prior=this.main;const next=this.chart.addSeries(series,options);this.main=next;
+  this.setCandles(this.outer.candles,false);try{this.chart.removeSeries(prior)}catch{}
+  if(range&&this.outer.candles.length)this.chart.timeScale().setVisibleLogicalRange(range);
+  this.setPreferences(p);
+ }
+ setTheme(theme){const t=themes[theme];this.chart.applyOptions({layout:{background:{type:'solid',color:t.background},textColor:t.text},grid:{vertLines:{color:t.grid},horzLines:{color:t.grid}},rightPriceScale:{borderColor:t.grid},timeScale:{borderColor:t.grid}});if(['candles','heikin'].includes(this.outer.type))this.main.applyOptions({upColor:t.up,downColor:t.down,wickUpColor:t.up,wickDownColor:t.down});}
+ setPreferences(p){const t=themes[this.outer.theme],L=window.LightweightCharts;this.chart.applyOptions({grid:{vertLines:{visible:p.grid,color:t.grid},horzLines:{visible:p.grid,color:t.grid}},crosshair:{vertLine:{visible:p.crosshair},horzLine:{visible:p.crosshair}},timeScale:{barSpacing:p.barSpacing,rightOffset:p.rightOffset},rightPriceScale:{mode:({normal:L.PriceScaleMode?.Normal??0,logarithmic:L.PriceScaleMode?.Logarithmic??1,percentage:L.PriceScaleMode?.Percentage??2})[p.priceScale]??0}});this.main.applyOptions({priceLineVisible:p.lastPrice,lastValueVisible:p.lastPrice,...(['candles','heikin'].includes(this.outer.type)?{upColor:p.upColor,downColor:p.downColor,wickUpColor:p.upColor,wickDownColor:p.downColor}:this.outer.type==='bars'?{upColor:p.upColor,downColor:p.downColor}:{})});}
  priceFormat(){return this.outer.priceDisplay?{type:'custom',minMove:0.00000001,formatter:v=>this.outer.formatPrice(v)}:{type:'price',precision:2,minMove:0.01}}
  setPriceDisplay(){const format=this.priceFormat();this.main.applyOptions({priceFormat:format});for(const s of this.priceSeries||[])s.applyOptions({priceFormat:format});}
  autoScale(){this.chart.priceScale('right').applyOptions({autoScale:true})}
@@ -92,12 +103,12 @@ class CanvasChart{
  autoScale(){this.render()}
  fit(){const n=this.outer.candles.length;const plotWidth=Math.max(50,this.w-this.marginRight-this.marginLeft);this.step=Math.max(3,Math.min(13,plotWidth/100));this.first=n-plotWidth/this.step+4;this.render()}
  showLast(count){const width=this.w-this.marginRight-this.marginLeft;this.step=Math.max(3,Math.min(30,width/count));this.first=this.outer.candles.length-count;this.render()}
- coordinateToLogical(x){return this.first+(x-this.marginLeft)/this.step}
+ coordinateToLogical(x){return this.first+(x-this.marginLeft)/this.step-.5}
  logicalToCoordinate(i){return this.marginLeft+(i-this.first)*this.step+this.step*.5}
  coordinateToPrice(y){const h=Math.max(20,this.mainHeight-this.marginTop);return this.scaleMax-(y-this.marginTop)/h*(this.scaleMax-this.scaleMin)}
  priceToCoordinate(p){const h=Math.max(20,this.mainHeight-this.marginTop);return this.marginTop+(this.scaleMax-p)/(this.scaleMax-this.scaleMin)*h}
  render(){if(this.pending)return;this.pending=true;requestAnimationFrame(()=>{this.pending=false;this.draw();this.onVisible?.()})}
- draw(){const {w,h,ctx}=this; if(!w||!h)return;const t=themes[this.theme],cs=this.outer.candles,cols=Math.ceil((w-this.marginRight)/this.step)+3,start=Math.max(0,Math.floor(this.first)-2),end=Math.min(cs.length,start+cols+5);
+ draw(){const {w,h,ctx}=this; if(!w||!h)return;const t=themes[this.theme],cs=displayCandles(this.outer.candles,this.outer.type),cols=Math.ceil((w-this.marginRight)/this.step)+3,start=Math.max(0,Math.floor(this.first)-2),end=Math.min(cs.length,start+cols+5);
   ctx.clearRect(0,0,w,h);ctx.fillStyle=t.background;ctx.fillRect(0,0,w,h);
   const panels=[];if(this.outer.lines.some(l=>l.pane==='rsi'))panels.push('rsi');if(this.outer.lines.some(l=>l.pane==='macd'))panels.push('macd');const subH=panels.length?Math.min(105,Math.max(66,(h-200)/panels.length)):0;
   this.mainHeight=h-this.marginBottom-subH*panels.length-6*panels.length;
@@ -107,8 +118,8 @@ class CanvasChart{
   for(let row=0;row<6;row++){const y=this.marginTop+(this.mainHeight-this.marginTop)*row/5;if(this.outer.preferences.grid){ctx.strokeStyle=t.grid;ctx.beginPath();ctx.moveTo(0,Math.round(y)+.5);ctx.lineTo(w-this.marginRight,y+.5);ctx.stroke()}const val=this.coordinateToPrice(y);ctx.fillStyle=t.text;ctx.fillText(this.outer.formatPrice(val),w-this.marginRight+7,y)}
   let ticks=Math.max(5,Math.ceil(105/this.step));for(let i=Math.floor(this.first/ticks)*ticks;i<end;i+=ticks){if(i<0)continue;const x=this.logicalToCoordinate(i);if(x<0||x>w-this.marginRight)continue;if(this.outer.preferences.grid){ctx.strokeStyle=t.minor;ctx.beginPath();ctx.moveTo(Math.round(x)+.5,this.marginTop);ctx.lineTo(x,h-this.marginBottom);ctx.stroke()}if(cs[i]){const d=new Date(cs[i].time*1000);ctx.fillStyle=t.text;ctx.textAlign='center';ctx.fillText(`${String(d.getUTCDate()).padStart(2,'0')} ${d.toLocaleString('en',{month:'short',timeZone:'UTC'})}`,x,h-12);ctx.textAlign='left'}}
   const volumeOn=this.outer.lines.some(l=>l.pane==='volume');if(volumeOn&&vals.length){const maxVol=Math.max(...vals.map(x=>x.volume||0),1);for(let i=start;i<end;i++){const d=cs[i];const x=this.logicalToCoordinate(i);if(x<0||x>w-this.marginRight)continue;const height=(d.volume||0)/maxVol*Math.min(90,this.mainHeight*.22);ctx.fillStyle=d.close>=d.open?'#12857076':'#bb4e6070';ctx.fillRect(x-Math.max(1,this.step*.36),this.mainHeight-height,Math.max(1.5,this.step*.72),height)}}
-  if(this.outer.type==='candles'){
-   for(let i=start;i<end;i++){const d=cs[i],x=this.logicalToCoordinate(i);if(x<0||x>=w-this.marginRight)continue;const up=d.close>=d.open;ctx.strokeStyle=ctx.fillStyle=up?this.outer.preferences.upColor:this.outer.preferences.downColor;ctx.lineWidth=Math.max(1,Math.min(1.3,this.step*.12));const hy=this.priceToCoordinate(d.high),ly=this.priceToCoordinate(d.low),oy=this.priceToCoordinate(d.open),cy=this.priceToCoordinate(d.close);ctx.beginPath();ctx.moveTo(x,hy);ctx.lineTo(x,ly);ctx.stroke();const width=Math.max(1,Math.min(22,this.step*.72));ctx.fillRect(x-width/2,Math.min(oy,cy),width,Math.max(1.1,Math.abs(oy-cy)))}
+  if(['candles','heikin','bars'].includes(this.outer.type)){
+   for(let i=start;i<end;i++){const d=cs[i],x=this.logicalToCoordinate(i);if(x<0||x>=w-this.marginRight)continue;const up=d.close>=d.open;ctx.strokeStyle=ctx.fillStyle=up?this.outer.preferences.upColor:this.outer.preferences.downColor;ctx.lineWidth=Math.max(1,Math.min(1.3,this.step*.12));const hy=this.priceToCoordinate(d.high),ly=this.priceToCoordinate(d.low),oy=this.priceToCoordinate(d.open),cy=this.priceToCoordinate(d.close);ctx.beginPath();ctx.moveTo(x,hy);ctx.lineTo(x,ly);ctx.stroke();const width=Math.max(1,Math.min(22,this.step*.72));if(this.outer.type==='bars'){ctx.beginPath();ctx.moveTo(x-width/2,oy);ctx.lineTo(x,oy);ctx.moveTo(x,cy);ctx.lineTo(x+width/2,cy);ctx.stroke()}else ctx.fillRect(x-width/2,Math.min(oy,cy),width,Math.max(1.1,Math.abs(oy-cy)))}
   }else{
    ctx.strokeStyle=t.line;ctx.lineWidth=2;ctx.beginPath();let started=false;for(let i=start;i<end;i++){const d=cs[i],x=this.logicalToCoordinate(i),y=this.priceToCoordinate(d.close);if(!started){ctx.moveTo(x,y);started=true}else ctx.lineTo(x,y)}
    if(this.outer.type==='area'){const firstX=this.logicalToCoordinate(start),lastX=this.logicalToCoordinate(end-1);const fill=ctx.createLinearGradient(0,this.marginTop,0,this.mainHeight);fill.addColorStop(0,'#527fff66');fill.addColorStop(1,'#527fff00');ctx.lineTo(lastX,this.mainHeight);ctx.lineTo(firstX,this.mainHeight);ctx.fillStyle=fill;ctx.fill();ctx.beginPath();for(let i=start;i<end;i++){const x=this.logicalToCoordinate(i),y=this.priceToCoordinate(cs[i].close);i===start?ctx.moveTo(x,y):ctx.lineTo(x,y)}}ctx.stroke()}
