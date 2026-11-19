@@ -24,7 +24,7 @@ export function paletteIcon(id){
 export function mountDrawingPalette({openModal,closeModal,layer,chart,toast,render,getPrefs,onFavorite,setShowFavorites}){
  openModal('Gambar','<div id="drawingPaletteV2" class="drawing-palette-v2"><label class="drawing-grid-search"><svg aria-hidden="true"><use href="#i-search"/></svg><input type="search" id="drawingToolSearch" placeholder="Cari" aria-label="Cari drawing tools" autocomplete="off"></label><div id="drawingCategoryTabs" class="drawing-grid-tabs" role="tablist" aria-label="Kategori gambar"></div><div id="drawingToolList" class="drawing-grid-scroll"></div><footer class="drawing-grid-footer" id="drawingFavoritesFooter"><label>'+paletteIcon('brush')+'<span>Tampilkan favorit pada Chart</span><input type="checkbox" role="switch" id="drawingFavoritesSwitch"><span class="drawing-switch-track" aria-hidden="true"></span></label></footer><div id="drawingFavoriteMenu" class="drawing-grid-context hidden" role="dialog" aria-label="Favorit drawing"><div class="drawing-context-card"><strong id="drawingContextLabel"></strong><button type="button" id="drawingFavoriteAction"></button><button type="button" id="drawingContextCancel">Batal</button></div></div></div>',root=>{
   const $=id=>root.querySelector('#'+id),panel=$('drawingPaletteV2'),field=$('drawingToolSearch'),tabs=$('drawingCategoryTabs'),list=$('drawingToolList'),context=$('drawingFavoriteMenu'),footer=$('drawingFavoritesFooter');
-  let tab='favorite',menuId=null,press=null,timer=null,suppressUntil=0;
+  let tab='favorite',menuId=null,press=null,timer=null,suppressUntil=0,swipe=null;
   const tabList=[['favorite','Favorit'],...PALETTE_GROUPS.map(([id,label])=>[id,label])];
   tabs.innerHTML=tabList.map(([id,label])=>'<button type="button" role="tab" data-drawing-tab="'+id+'" aria-selected="'+(id===tab)+'">'+esc(label)+'</button>').join('');
   function paint(){
@@ -37,6 +37,15 @@ export function mountDrawingPalette({openModal,closeModal,layer,chart,toast,rend
    tabs.querySelectorAll('[data-drawing-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.drawingTab===tab)));
    footer.classList.toggle('hidden',tab!=='favorite'||!!q.trim());$('drawingFavoritesSwitch').checked=getPrefs().showDrawingFavorites;
   }
+  // Keep the horizontal scrolling local to the categories; scrollIntoView can
+  // also scroll the sheet's overflow-hidden ancestors on Android.
+  function selectTab(id){
+   const b=tabs.querySelector('[data-drawing-tab="'+id+'"]');if(!b)return;
+   cancel();tab=id;field.value='';list.scrollTop=0;paint();
+   const r=b.getBoundingClientRect(),t=tabs.getBoundingClientRect();
+   if(r.left<t.left)tabs.scrollLeft+=r.left-t.left-8;
+   else if(r.right>t.right)tabs.scrollLeft+=r.right-t.right+8;
+  }
   function closeContext(){context.classList.add('hidden');menuId=null}
   function favoriteMenu(id){if(!panel.isConnected||!canFavorite(id))return;menuId=id;$('drawingContextLabel').textContent=LABELS[id]||TOOL_CATALOG[id].label;$('drawingFavoriteAction').textContent=getPrefs().favorites.tools.includes(id)?'Hapus dari favorit':'Favoritkan';context.classList.remove('hidden');suppressUntil=Date.now()+700}
   const cancel=()=>{clearTimeout(timer);timer=null;press=null};
@@ -47,10 +56,36 @@ export function mountDrawingPalette({openModal,closeModal,layer,chart,toast,rend
   function moved(x,y){if(press&&Math.hypot(x-press.x,y-press.y)>10)cancel()}
   // Touch and mouse are handled separately. Keep the pressed target until release;
   // Android may dispatch pointercancel when its native context gesture begins.
-  list.addEventListener('touchstart',e=>{const b=e.target.closest('[data-draw-pick]'),t=e.touches[0];if(b&&t&&e.touches.length===1)beginPress(b.dataset.drawPick,t.clientX,t.clientY,'touch',t.identifier);else cancel()},{passive:true});
-  list.addEventListener('touchmove',e=>{if(press?.source==='touch'){const t=[...e.touches].find(x=>x.identifier===press.pointer);if(t)moved(t.clientX,t.clientY);else cancel()}},{passive:true});
-  list.addEventListener('touchend',e=>{if(press?.source==='touch'){const p=press,held=Date.now()-p.started>=520;cancel();if(held||menuId){if(held)favoriteMenu(p.id);e.preventDefault()}}else if(menuId)e.preventDefault()},{passive:false});
-  list.addEventListener('touchcancel',cancel,{passive:true});
+  list.addEventListener('touchstart',e=>{
+   const b=e.target.closest('[data-draw-pick]'),t=e.touches[0];
+   if(!t||e.touches.length!==1||menuId){swipe=null;cancel();return}
+   swipe={x:t.clientX,y:t.clientY,pointer:t.identifier,axis:null};
+   if(b)beginPress(b.dataset.drawPick,t.clientX,t.clientY,'touch',t.identifier);else cancel();
+  },{passive:true});
+  list.addEventListener('touchmove',e=>{
+   if(e.touches.length!==1){swipe=null;cancel();return}
+   if(swipe){
+    const t=[...e.touches].find(x=>x.identifier===swipe.pointer);
+    if(!t){swipe=null;cancel();return}
+    const dx=Math.abs(t.clientX-swipe.x),dy=Math.abs(t.clientY-swipe.y);
+    if(!swipe.axis&&Math.max(dx,dy)>12)swipe.axis=dx>dy*1.3?'x':dy>dx*1.3?'y':null;
+   }
+   if(press?.source==='touch'){const t=[...e.touches].find(x=>x.identifier===press.pointer);if(t)moved(t.clientX,t.clientY);else cancel()}
+  },{passive:true});
+  list.addEventListener('touchend',e=>{
+   const g=swipe;swipe=null;
+   const t=g&&[...e.changedTouches].find(x=>x.identifier===g.pointer);
+   if(t&&!menuId&&!field.value.trim()&&g.axis!=='y'){
+    const dx=t.clientX-g.x,dy=t.clientY-g.y;
+    if(Math.abs(dx)>=48&&Math.abs(dx)>Math.abs(dy)*1.4){
+     cancel();suppressUntil=Date.now()+350;if(e.cancelable)e.preventDefault();
+     const i=tabList.findIndex(([id])=>id===tab),next=tabList[i+(dx<0?1:-1)];
+     if(next)selectTab(next[0]);return;
+    }
+   }
+   if(press?.source==='touch'){const p=press,held=Date.now()-p.started>=520;cancel();if(held||menuId){if(held)favoriteMenu(p.id);if(e.cancelable)e.preventDefault()}}else if(menuId&&e.cancelable)e.preventDefault();
+  },{passive:false});
+  list.addEventListener('touchcancel',()=>{swipe=null;cancel()},{passive:true});
   list.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'||e.button!==0)return;const b=e.target.closest('[data-draw-pick]');if(b)beginPress(b.dataset.drawPick,e.clientX,e.clientY,'pointer',e.pointerId)},{passive:true});
   list.addEventListener('pointermove',e=>{if(press?.source==='pointer'&&e.pointerId===press.pointer)moved(e.clientX,e.clientY)},{passive:true});
   for(const type of ['pointerup','pointercancel','pointerleave'])list.addEventListener(type,()=>{if(press?.source==='pointer')cancel()},{passive:true});
@@ -68,7 +103,7 @@ export function mountDrawingPalette({openModal,closeModal,layer,chart,toast,rend
    layer.syncControls();layer.render();paint();
   }
   list.onclick=e=>{const b=e.target.closest('[data-draw-pick]');if(!b||Date.now()<suppressUntil||menuId)return;run(b.dataset.drawPick)};
-  tabs.onclick=e=>{const b=e.target.closest('[data-drawing-tab]');if(!b)return;cancel();tab=b.dataset.drawingTab;field.value='';list.scrollTop=0;paint();b.scrollIntoView({block:'nearest',inline:'nearest'})};
+  tabs.onclick=e=>{const b=e.target.closest('[data-drawing-tab]');if(b)selectTab(b.dataset.drawingTab)};
   field.oninput=()=>{cancel();list.scrollTop=0;paint()};
   $('drawingFavoriteAction').onclick=()=>{const id=menuId;if(id){onFavorite(id);closeContext();paint()}};
   $('drawingContextCancel').onclick=closeContext;context.onclick=e=>{if(e.target===context&&Date.now()>=suppressUntil)closeContext()};

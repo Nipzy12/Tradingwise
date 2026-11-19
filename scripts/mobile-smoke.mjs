@@ -49,7 +49,26 @@ try{
  await tap('[data-hub-action=toolstrip]');await visible('#mobileToolFavorites');
  await tap('[data-mobile-tool=all]');await visible('#drawingToolSearch');await snap('04-drawing-studio');
  assert.equal(await page.locator('.drawing-tile-star').count(),0);await visible('.drawing-grid-empty');
+ // Drawing palette: bounded horizontal tab scrolling and compact touch targets.
+ const paletteCDP=await page.context().newCDPSession(page);
+ async function swipePalette(sel,direction){
+  const b=await page.locator(sel).boundingBox(),y=b.y+Math.min(b.height/2,24),a=b.x+b.width*(direction==='left'?.82:.18),z=b.x+b.width*(direction==='left'?.18:.82);
+  await paletteCDP.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:a,y}]});
+  for(let i=1;i<=8;i++){await paletteCDP.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:a+(z-a)*i/8,y}]});await page.waitForTimeout(24)}
+  await paletteCDP.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ }
+ const paletteSize=await page.evaluate(()=>{const p=document.querySelector('#drawingPaletteV2'),t=document.querySelector('#drawingCategoryTabs'),m=document.querySelector('.modal');return {panel:p.getBoundingClientRect().width,modal:m.clientWidth,tabs:t.clientWidth,total:t.scrollWidth,x:p.getBoundingClientRect().left}});
+ assert.ok(paletteSize.panel<=paletteSize.modal+1&&paletteSize.x>=0,'drawing panel stays inside modal');
+ assert.ok(paletteSize.total>paletteSize.tabs,'tab strip owns horizontal overflow');
+ await swipePalette('#drawingCategoryTabs','left');await page.waitForFunction(()=>document.querySelector('#drawingCategoryTabs').scrollLeft>40);
+ const tabOffset=await page.locator('#drawingCategoryTabs').evaluate(el=>el.scrollLeft);
+ await swipePalette('#drawingCategoryTabs','right');await page.waitForFunction(n=>document.querySelector('#drawingCategoryTabs').scrollLeft<n-20,tabOffset);
  await tap('[data-drawing-tab=trend]');await visible('[data-draw-pick=horizontal]');
+ const compact=await page.locator('[data-draw-pick=horizontal]').evaluate(el=>({tile:el.getBoundingClientRect().height,icon:el.querySelector('svg').getBoundingClientRect().width,grid:el.parentElement.getBoundingClientRect().right,panel:el.closest('#drawingPaletteV2').getBoundingClientRect().right}));
+ assert.ok(compact.tile>=44&&compact.tile<=64&&compact.icon<=22&&compact.grid<=compact.panel+1,'compact tiles and icons fit inside screen');
+ await swipePalette('#drawingToolList','left');await page.waitForSelector('[data-drawing-tab=fib][aria-selected=true]');await visible('[data-draw-pick=fibo]');
+ await swipePalette('#drawingToolList','right');await page.waitForSelector('[data-drawing-tab=trend][aria-selected=true]');await visible('[data-draw-pick=horizontal]');
+ await paletteCDP.detach();
  await page.locator('[data-draw-pick=horizontal]').scrollIntoViewIfNeeded();const target=await page.locator('[data-draw-pick=horizontal]').boundingBox();const cdp=await page.context().newCDPSession(page);const point={x:target.x+target.width/2,y:target.y+target.height/2};
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});await page.locator('#drawingFavoriteAction').waitFor({state:'visible',timeout:3000});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await visible('#drawingFavoriteAction');assert.equal(await page.locator('#drawingFavoriteAction').innerText(),'Favoritkan');await page.waitForTimeout(150);await tap('#drawingFavoriteAction');
  await tap('[data-drawing-tab=favorite]');assert.equal(await page.locator('.drawing-tile-star').count(),1);await snap('04b-favorite');
