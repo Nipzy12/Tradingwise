@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {TOOL_CATALOG,TOOL_IDS,timeAt,logicalAt,anchor,normalizeDrawing,shiftDrawing,positionStats,seedPosition,fibPrices,clipLine,rangeStats} from '../src/drawing-model.js';
+import {TOOL_CATALOG,TOOL_IDS,POINT_KEYS,timeAt,logicalAt,anchor,normalizeDrawing,shiftDrawing,positionStats,seedPosition,fibPrices,clipLine,rangeStats} from '../src/drawing-model.js';
 import {DrawingLayer} from '../src/drawings.js';
 import {heikinAshi,toSeriesData} from '../src/chart-display.js';
 import {normalizeUiPreferences,toggleFavorite} from '../src/ui-preferences.js';
@@ -94,4 +94,25 @@ test('every implemented drawing can be placed, selected, duplicated, undone and 
    l.remove(copy);l.remove(id);assert.equal(l.drawings.length,0,type+' removed');
   }finally{if(prev===undefined)delete globalThis.prompt;else globalThis.prompt=prev}
  }
+});
+
+test('all supported drawing types produce chart geometry, not merely an object record',()=>{
+ const saved=globalThis.document;globalThis.document={getElementById:()=>null};
+ try{
+  for(const type of TOOL_IDS){
+   const l=layer(),raw={type,text:'Test'};
+   const count=TOOL_CATALOG[type].points;
+   for(let i=0;i<count;i++)raw[POINT_KEYS[i]]=p(i+1,100+(i%2?6:0)+i);
+   if(type==='long'||type==='short')Object.assign(raw,seedPosition(type,raw.a,raw.b,candles));
+   if(type==='brush'||type==='highlighter')raw.points=[raw.a,raw.b];
+   const d=normalizeDrawing(raw,candles);assert.ok(d,type+' normalize');
+   l.drawings=[d];l.selected=null;l.preview=null;l.hidden=false;l.bounds=()=>({w:600,h:400,right:540,bottom:360});
+   l.svg={innerHTML:'',setAttribute(){}};
+   l.chart={candles,logicalToCoordinate:i=>20+i*35,priceToCoordinate:y=>350-y*2,formatPrice:String};
+   DrawingLayer.prototype.render.call(l);
+   const markup=l.svg.innerHTML.split('<g data-drawing-id=')[1]||'';
+   assert.match(markup,/<(?:line|rect|polygon|polyline|path|circle|ellipse|text)\b/,type+' renders visible geometry');
+   assert.doesNotMatch(markup,/NaN|Infinity/,type+' finite geometry');
+  }
+ }finally{if(saved===undefined)delete globalThis.document;else globalThis.document=saved}
 });
