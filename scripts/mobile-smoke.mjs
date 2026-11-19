@@ -76,7 +76,14 @@ try{
  await page.waitForTimeout(750);await page.locator('#drawingToolSearch').fill('Horizontal line');await page.locator('[data-draw-pick=horizontal]').first().tap();
  await visible('#drawingHint');const plot=await page.locator('#chartStage').boundingBox();
  await page.touchscreen.tap(plot.x+Math.floor(plot.width*.4),plot.y+Math.floor(plot.height*.45));
- await page.waitForFunction(()=>document.querySelector('#drawingOverlay [data-drawing-id]'));await visible('#drawingQuickBar');await snap('05-drawing');
+ await page.waitForFunction(()=>document.querySelector('#drawingOverlay [data-drawing-id]'));await visible('#drawingQuickBar');
+ // Direct styling on the selected drawing must affect its rendered geometry, stay selected, and support undo.
+ await visible('#drawingQuickColor');await page.locator('#drawingQuickColor').fill('#ff9900');
+ await page.locator('#drawingQuickWidth').selectOption('4');
+ await page.locator('#drawingQuickDash').selectOption('dashed');
+ const styled=()=>page.locator('#drawingOverlay [data-drawing-id] line').first().evaluate(el=>[el.getAttribute('stroke'),el.getAttribute('stroke-width'),el.getAttribute('stroke-dasharray')]);
+ assert.deepEqual(await styled(),['#ff9900','4','7 4']);await visible('#drawingQuickBar');
+ await snap('05-drawing');
  await tap('[data-mobile-action=analysis]');await tap('[data-hub-action=objects]');await visible('#objectsView');assert.ok(await page.locator('[data-object-action=edit]').count()>0);await snap('06-objects');
  await tap('[data-mobile-nav=explore]');await visible('#mobileExplorePage');await page.waitForSelector('[data-explore-save="BIQUOTE:USDJPY"]');
  await tap('[data-explore-save="BIQUOTE:USDJPY"]');assert.equal(await page.locator('[data-explore-save="BIQUOTE:USDJPY"]').innerText(),'✓');await snap('07-explore');
