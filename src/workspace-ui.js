@@ -47,6 +47,7 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
   el('favoriteIndicators').innerHTML=prefs.favorites.indicators.map(id=>{
    const item=CATALOG.find(x=>x.id===id);return '<button class="favorite-chip'+(state.enabled.includes(id)?' active':'')+'" data-quick-indicator="'+esc(id)+'" title="'+esc(item?.name||id)+'">'+esc(id==='smc-entry-pro-v5'?'SMC':id.toUpperCase())+'</button>';
   }).join('')||'<span class="favorite-bar-caption">Pin indikator dari menu</span>';
+  window.dispatchEvent(new Event('tw:ui-render'));
  }
  function favorite(kind,value){
   try{prefs=toggleFavorite(prefs,kind,value);save();render();if(kind==='symbols')renderWatchlist();toast((current(kind,value)?'Disimpan':'Dihapus')+' dari favorit');}
@@ -202,6 +203,7 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
   install,render,apply,hasFavorite:current,toggleFavorite:favorite,
   orderWatchlist:order,favoriteCatalog,timeframesModal,chartSettingsModal,watchlistSettings,favoritesModal,
   setLayout,importPrefs,exportPrefs:()=>normalizeUiPreferences(prefs),
+  setChartPreference(key,value){if(key in prefs.settings){prefs.settings[key]=value;save();apply()}},
   get panelCollapsed(){return prefs.panelCollapsed},
   get sidebarCollapsed(){return prefs.sidebarCollapsed}
  };
