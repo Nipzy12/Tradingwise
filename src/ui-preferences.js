@@ -2,7 +2,7 @@
 // All preferences are per-browser; no secrets or broker OAuth data are persisted here.
 export const UI_PREF_KEY='tradingwise-ui-v08';
 const symbolPattern=/^(?:BINANCE|BIQUOTE):[A-Z0-9_.-]{1,64}$|^CTRADER:\d{1,20}:\d{1,20}$/;
-const TOOL_IDS=['trend','horizontal','vertical','rectangle','fibo','text','long','short','ruler'];
+import {TOOL_IDS} from './drawing-model.js';
 const INDICATOR_IDS=['smc-entry-pro-v5','ema9','ema21','sma20','bb','vwap','volume','rsi','macd'];
 export const TIMEFRAMES=['1m','3m','5m','15m','30m','1h','2h','4h','1d','1w'];
 export const DEFAULT_UI_PREFS=Object.freeze({

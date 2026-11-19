@@ -18,6 +18,9 @@ export class DrawingLayer{
  install(){
   for(const [event,method] of [['pointerdown','down'],['pointermove','move'],['pointerup','up']])this.svg.addEventListener(event,e=>this[method](e));
   this.svg.addEventListener('pointercancel',()=>this.cancelGesture());
+  const schedule=()=>{if(this.resizeFrame)return;this.resizeFrame=requestAnimationFrame(()=>{this.resizeFrame=null;this.render()})};
+  this.stage.addEventListener('pointermove',e=>{if(this.tool==='pointer'&&!this.gesture&&e.buttons)schedule()},{passive:true});
+  this.stage.addEventListener('wheel',schedule,{passive:true});
   this.svg.addEventListener('dblclick',e=>{const id=e.target.closest('[data-drawing-id]')?.dataset.drawingId;if(id){e.preventDefault();e.stopPropagation();this.onEdit?.(id)}});
   this.stage.addEventListener('pointerdown',e=>{if(this.tool==='pointer'&&!e.target.closest('[data-drawing-id],#drawingQuickBar'))this.select(null)});
   document.addEventListener('keydown',e=>{

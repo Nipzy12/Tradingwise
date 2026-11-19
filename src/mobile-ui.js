@@ -71,12 +71,10 @@ export function mountMobileUI({state,chart,ui,marketInfo,updateSymbol,updateTF,o
  }
  function showSidebar(name){$('bottomPanel').classList.add('collapsed');setRight(name,true);nav(name==='alerts'?'alerts':'watchlist')}
  function listModal(title,items){openModal(title,'<div class="modal-list mobile-menu-list">'+items.map((it,i)=>'<button type="button" class="modal-symbol" data-mobile-menu="'+i+'"><strong>'+esc(it[0])+'</strong><span class="right-tag">›</span></button>').join('')+'</div>',root=>{root.onclick=e=>{const b=e.target.closest('[data-mobile-menu]');if(!b)return;const item=items[Number(b.dataset.mobileMenu)];if(item){closeModal();item[1]()}}})}
- function drawings(){const tools=[...document.querySelectorAll('.leftbar .tool[data-tool]')];listModal('Drawing tools',[
- ...tools.map(b=>[b.title,()=>b.click()]),
- ['Magnet',()=>click('magnetBtn')],['Sembunyikan / tampilkan drawing',()=>click('hideDrawingsBtn')],['Hapus semua drawing',()=>click('clearDrawingsBtn')]
- ])}
+ function drawings(){showChart();ui.drawingToolsModal()}
+
  function more(){listModal('Opsi chart',[
- ['Jenis chart',()=>click('chartTypeBtn')],['Chart settings',()=>click('chartSettingsBtn')],['Kelola favorit',()=>ui.favoritesModal()],['Bandingkan simbol',()=>click('compareBtn')],['Alert',()=>click('alertBtn')],['Bar replay',()=>click('replayBtn')],['Object tree',()=>showSidebar('objects')],
+ ['Drawing Studio',drawings],['Jenis chart',()=>click('chartTypeBtn')],['Chart settings',()=>click('chartSettingsBtn')],['Kelola favorit',()=>ui.favoritesModal()],['Bandingkan simbol',()=>click('compareBtn')],['Alert',()=>click('alertBtn')],['Bar replay',()=>click('replayBtn')],['Object tree',()=>showSidebar('objects')],
  ['Pine Editor',()=>{showChart();setPanel('pine')}],['Strategy Tester',()=>{showChart();setPanel('tester')}],['Trading Panel (paper)',()=>{showChart();setPanel('trade')}],['Ganti tema',()=>click('themeBtn')],['Simpan workspace',()=>click('saveBtn')],['Tentang Tradingwise',()=>click('infoBtn')]
  ])}
  async function chooseCurrency(target){

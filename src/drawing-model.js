@@ -15,7 +15,7 @@ export function clone(value){return JSON.parse(JSON.stringify(value))}
 const number=(x,fallback=0)=>Number.isFinite(Number(x))&&x!==null&&x!==''?Number(x):fallback;
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const hex=(s,fallback)=>typeof s==='string'&&/^#[a-f0-9]{6}$/i.test(s)?s:fallback;
-const valid=p=>p&&Number.isFinite(p.price)&&Number.isFinite(p.logical);
+const valid=p=>p&&Number.isFinite(p.price)&&Math.abs(p.price)<=1e15&&Number.isFinite(p.logical)&&Math.abs(p.logical)<=1e8;
 export function stepSeconds(candles){const n=candles.length;if(n<2)return 60;const a=[];for(let i=Math.max(1,n-10);i<n;i++)if(candles[i].time>candles[i-1].time)a.push(candles[i].time-candles[i-1].time);a.sort((x,y)=>x-y);return a[Math.floor(a.length/2)]||60}
 export function timeAt(candles,logical){
  const n=candles.length;if(!n)return null;
@@ -37,6 +37,7 @@ export function normalizeAnchor(candles,p){
  return {logical:logicalAt(candles,p.time,p.logical),price:p.price,time:Number.isFinite(p.time)?p.time:timeAt(candles,p.logical)};
 }
 export function normalizeStyle(type,style={}){
+ if(!style||typeof style!=='object')style={};
  const zone=type==='obZone'?'#a68afb':type==='fvgZone'?'#20b9a3':type==='liquidity'?'#e5b34d':'#598eff';
  return {color:hex(style.color,zone),fill:hex(style.fill,zone),width:clamp(number(style.width,type==='highlighter'?12:2),1,20),opacity:clamp(number(style.opacity,type==='highlighter'?.28:.14),0,1),dash:['solid','dashed','dotted'].includes(style.dash)?style.dash:'solid',extend:style.extend===true};
 }
@@ -47,6 +48,7 @@ export function normalizeLevels(levels,type='fibo'){
  return list.length?list:[...defaults];
 }
 export function normalizeRisk(risk={}){
+ if(!risk||typeof risk!=='object')risk={};
  return {balance:clamp(number(risk.balance,1000),0,1e12),percent:clamp(number(risk.percent,1),0,100),contract:clamp(number(risk.contract,1),.00000001,1e12)};
 }
 export function seedPosition(type,a,b,candles){
