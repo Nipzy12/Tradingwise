@@ -1,4 +1,4 @@
-import {POINT_KEYS,TOOL_CATALOG,clone,normalizeStyle,normalizeDrawing,normalizeRisk,normalizeLevels,positionStats} from './drawing-model.js';
+import {POINT_KEYS,TOOL_CATALOG,isVariablePath,clone,normalizeStyle,normalizeDrawing,normalizeRisk,normalizeLevels,positionStats} from './drawing-model.js';
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const isPosition=t=>t==='long'||t==='short';
 const isBrush=t=>t==='brush'||t==='highlighter';
@@ -9,13 +9,14 @@ export function openDrawingProperties(layer,id,{openModal,closeModal,toast}){
  const d=clone(live),s=normalizeStyle(d.type,d.style),risk=normalizeRisk(d.risk),t=d.type;
  const field=(title,key,value,extra='')=>'<label><span>'+title+'</span><input data-setting="'+key+'" value="'+esc(value)+'" '+extra+'></label>';
  const checkbox=(title,key,value)=>'<label><span>'+title+'</span><input data-setting="'+key+'" type="checkbox" '+(value?'checked':'')+'></label>';
- const points=isBrush(t)?'<p class="settings-note">Brush bisa digeser sebagai satu objek.</p>':POINT_KEYS.filter(k=>d[k]&&(TOOL_CATALOG[t].points!==1||k==='a')).map(k=>{
-   const name=isPosition(t)?({a:'Entry',b:'Take profit',c:'Stop loss'})[k]:'Titik '+(POINT_KEYS.indexOf(k)+1);
-   return '<div class="drawing-coordinate"><strong>'+name+'</strong>'+field('Harga asli','price-'+k,d[k].price,'type="number" step="any" required')+field('Waktu (UTC)','time-'+k,tf(d[k].time),'type="datetime-local" step="1" required')+'</div>';
+ const coords=isVariablePath(t)?d.points.map((p,i)=>['p'+i,p]):POINT_KEYS.filter(k=>d[k]&&(TOOL_CATALOG[t].points!==1||k==='a')).map(k=>[k,d[k]]);
+ const points=isBrush(t)?'<p class="settings-note">Brush bisa digeser sebagai satu objek.</p>':coords.map(([k,p],i)=>{
+   const name=isPosition(t)?({a:'Entry',b:'Take profit',c:'Stop loss'})[k]:'Titik '+(i+1);
+   return '<div class="drawing-coordinate"><strong>'+name+'</strong>'+field('Harga asli','price-'+k,p.price,'type="number" step="any" required')+field('Waktu (UTC)','time-'+k,tf(p.time),'type="datetime-local" step="1" required')+'</div>';
  }).join('');
- const fib=['fibo','fibExtension'].includes(t)?'<div class="drawing-form-section"><h4>Fibonacci</h4>'+field('Level (pisahkan koma)','levels',normalizeLevels(d.levels,t).join(', '))+'</div>':'';
+ const fib=['fibo','fibExtension'].includes(t)?'<div class="drawing-form-section"><h4>Fibonacci</h4>'+field('Level (pisahkan koma)','levels',normalizeLevels(d.levels,t).join(', '))+checkbox('Reverse level','reverse',d.reverse)+checkbox('Extend left','extendLeft',s.extendLeft)+'</div>':'';
  const rr=isPosition(t)?'<div class="drawing-form-section"><h4>Risk / Reward</h4>'+field('Saldo (quote asli)','balance',risk.balance,'type="number" min="0" step="any"')+field('Risk (%)','riskPercent',risk.percent,'type="number" min="0" max="100" step="any"')+field('Contract size (unit/lot)','contract',risk.contract,'type="number" min="0.00000001" step="any"')+'<div class="drawing-risk-summary" id="drawingRiskSummary">'+esc(summary(d))+'</div><p class="settings-note">Saldo/risk dalam mata uang quote asli. Ukuran lot adalah estimasi tanpa spread, fee, margin, dan batas lot broker. Contract size harus disesuaikan instrumen/broker.</p></div>':'';
- const body='<form id="drawingSettingsForm" class="drawing-properties"><div class="drawing-form-section"><h4>Style</h4>'+field('Warna garis','color',s.color,'type="color"')+field('Warna isi','fill',s.fill,'type="color"')+field('Ketebalan','width',s.width,'type="number" min="1" max="20" step="1"')+field('Opacity isi (0–1)','opacity',s.opacity,'type="number" min="0" max="1" step="0.05"')+'<label><span>Gaya garis</span><select data-setting="dash">'+['solid','dashed','dotted'].map(v=>'<option '+(v===s.dash?'selected':'')+'>'+v+'</option>').join('')+'</select></label>'+field('Label / teks','text',d.text,'maxlength="200"')+(['rectangle','obZone','fvgZone','fibo','fibExtension'].includes(t)?checkbox('Extend right','extend',s.extend):'')+checkbox('Kunci objek','locked',d.locked)+checkbox('Sembunyikan objek','hidden',d.hidden)+'</div><div class="drawing-form-section"><h4>Coordinates</h4>'+points+'</div>'+fib+rr+'<div class="modal-actions"><button type="button" class="mini-btn" id="drawingTemplateSave">Simpan sebagai default tool</button><button type="submit" class="primary-tiny">Terapkan</button></div><p class="settings-note">Titik harga selalu memakai nilai provider asli, bukan hasil konversi mata uang tampilan.</p></form>';
+ const body='<form id="drawingSettingsForm" class="drawing-properties"><div class="drawing-form-section"><h4>Style</h4>'+field('Warna garis','color',s.color,'type="color"')+field('Warna isi','fill',s.fill,'type="color"')+field('Ketebalan','width',s.width,'type="number" min="1" max="20" step="1"')+field('Opacity isi (0–1)','opacity',s.opacity,'type="number" min="0" max="1" step="0.05"')+'<label><span>Gaya garis</span><select data-setting="dash">'+['solid','dashed','dotted'].map(v=>'<option '+(v===s.dash?'selected':'')+'>'+v+'</option>').join('')+'</select></label>'+field('Label / teks','text',d.text,'maxlength="200"')+(['rectangle','obZone','fvgZone','fibo','fibExtension'].includes(t)?checkbox('Extend right','extend',s.extend):'')+ (t==='polyline'?checkbox('Tutup bentuk','closed',d.closed):'')+checkbox('Kunci objek','locked',d.locked)+checkbox('Sembunyikan objek','hidden',d.hidden)+'</div><div class="drawing-form-section"><h4>Coordinates</h4>'+points+'</div>'+fib+rr+'<div class="modal-actions"><button type="button" class="mini-btn" id="drawingTemplateSave">Simpan sebagai default tool</button><button type="submit" class="primary-tiny">Terapkan</button></div><p class="settings-note">Titik harga selalu memakai nilai provider asli, bukan hasil konversi mata uang tampilan.</p></form>';
  openModal(TOOL_CATALOG[t]?.label||'Drawing settings',body,root=>{
   const form=root.querySelector('#drawingSettingsForm');
   const el=k=>form.querySelector('[data-setting="'+k+'"]');
@@ -23,13 +24,15 @@ export function openDrawingProperties(layer,id,{openModal,closeModal,toast}){
   const checked=k=>el(k)?.checked===true;
   function read(){
    if(!form.checkValidity())throw Error('Isian pengaturan belum valid');
-   const result=clone(d);result.style=normalizeStyle(t,{color:val('color'),fill:val('fill'),width:Number(val('width')),opacity:Number(val('opacity')),dash:val('dash'),extend:checked('extend')});
+   const result=clone(d);result.style=normalizeStyle(t,{color:val('color'),fill:val('fill'),width:Number(val('width')),opacity:Number(val('opacity')),dash:val('dash'),extend:checked('extend'),extendLeft:checked('extendLeft')});
    result.text=val('text')||'';result.locked=checked('locked');result.hidden=checked('hidden');
-   for(const k of POINT_KEYS)if(el('price-'+k)){
-    const price=Number(val('price-'+k)),time=val('time-'+k)===tf(d[k].time)?d[k].time:Date.parse(val('time-'+k)+'Z')/1000;
+   for(const [k,p] of coords)if(el('price-'+k)){
+    const price=Number(val('price-'+k)),time=val('time-'+k)===tf(p.time)?p.time:Date.parse(val('time-'+k)+'Z')/1000;
     if(!Number.isFinite(price)||!Number.isFinite(time))throw Error('Koordinat harga/waktu tidak valid');
-    result[k]={...result[k],price,time};
+    const next={...p,price,time};if(isVariablePath(t))result.points[Number(k.slice(1))]=next;else result[k]=next;
    }
+   if(isVariablePath(t)){result.a=result.points[0];result.b=result.points.at(-1);result.closed=t==='polyline'&&checked('closed')}
+   if(el('reverse'))result.reverse=checked('reverse');
    if(TOOL_CATALOG[t].points===1)result.b={...result.a};
    if(el('levels')){const raw=val('levels').split(',').map(x=>x.trim()).filter(Boolean).map(Number);if(!raw.length||raw.some(x=>!Number.isFinite(x)||x< -10||x>20)||raw.length>24)throw Error('Masukkan maksimal 24 level valid (-10 sampai 20)');result.levels=normalizeLevels(raw,t)}
    if(isPosition(t))result.risk=normalizeRisk({balance:Number(val('balance')),percent:Number(val('riskPercent')),contract:Number(val('contract'))});
