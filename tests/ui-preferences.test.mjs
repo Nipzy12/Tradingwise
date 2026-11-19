@@ -6,13 +6,14 @@ import {
  orderWatchlist,readUiPreferences,writeUiPreferences
 } from '../src/ui-preferences.js';
 
-test('defaults provide functional pinned symbol, timeframe, tool and indicator collections',()=>{
+test('defaults leave drawing favorites empty while keeping symbol, timeframe and indicator favorites',()=>{
  const p=normalizeUiPreferences();
  assert.equal(p.settings.grid,true);
  assert.equal(p.panelCollapsed,true);
  assert.ok(hasFavorite(p,'symbols','BINANCE:BTCUSDT'));
  assert.ok(hasFavorite(p,'timeframes','1h'));
- assert.ok(hasFavorite(p,'tools','trend'));
+ assert.deepEqual(p.favorites.tools,[]);
+ assert.equal(hasFavorite(p,'tools','trend'),false);
  assert.ok(hasFavorite(p,'indicators','ema9'));
  assert.equal(p.favorites.timeframes.every(x=>TIMEFRAMES.includes(x)),true);
 });
