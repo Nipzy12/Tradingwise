@@ -84,6 +84,28 @@ try{
  const styled=()=>page.locator('#drawingOverlay [data-drawing-id] line').first().evaluate(el=>[el.getAttribute('stroke'),el.getAttribute('stroke-width'),el.getAttribute('stroke-dasharray')]);
  assert.deepEqual(await styled(),['#ff9900','4','7 4']);await visible('#drawingQuickBar');
  await snap('05-drawing');
+ // Genuine mobile taps: more vertices than the legacy fixed-count paths allowed.
+ await tap('[data-mobile-tool=all]');await page.locator('#drawingToolSearch').fill('Polyline');await tap('[data-draw-pick=polyline]');
+ const pbox=await page.locator('#chartStage').boundingBox();
+ for(let i=0;i<7;i++)await page.touchscreen.tap(pbox.x+pbox.width*(.12+i*.09),pbox.y+pbox.height*(i%2?.42:.27));
+ await visible('#drawingHintFinish');await tap('#drawingHintFinish');await visible('#drawingQuickBar');
+ const poly=page.locator('#drawingOverlay [data-drawing-id]').last();
+ assert.equal(await poly.locator('polyline').first().evaluate(el=>el.getAttribute('points').trim().split(/ +/).length),7);
+ assert.equal(await poly.locator('[data-handle=p6]').count(),2);
+ await tap('[data-drawing-action=edit]');await visible('[data-setting=price-p6]');
+ await page.locator('[data-setting=price-p6]').fill(String(Number(await page.locator('[data-setting=price-p6]').inputValue())+1));await tap('#drawingSettingsForm button[type=submit]');
+ await visible('#drawingQuickBar');await snap('05b-polyline');
+ await tap('[data-mobile-tool=all]');await page.locator('#drawingToolSearch').fill('Fib Retracement');await tap('[data-draw-pick=fibo]');
+ await page.touchscreen.tap(pbox.x+pbox.width*.2,pbox.y+pbox.height*.3);
+ await page.touchscreen.tap(pbox.x+pbox.width*.55,pbox.y+pbox.height*.48);
+ await visible('#drawingQuickBar');
+ const fib=page.locator('#drawingOverlay [data-drawing-id]').last();
+ const level=(k)=>fib.locator('text').filter({hasText:new RegExp('^'+k+' \\(')}).first().innerText();
+ const zero=await level('0'),one=await level('1');
+ assert.notEqual(zero.slice(1),one.slice(1));
+ await tap('[data-drawing-action=edit]');await page.locator('[data-setting=reverse]').check();await page.locator('[data-setting=extendLeft]').check();await tap('#drawingSettingsForm button[type=submit]');
+ assert.equal((await level('0')).slice(1),one.slice(1));assert.equal((await level('1')).slice(1),zero.slice(1));
+ assert.ok(await fib.locator('line[x1="0"]').count()>0);await snap('05c-fibonacci');
  await tap('[data-mobile-action=analysis]');await tap('[data-hub-action=objects]');await visible('#objectsView');assert.ok(await page.locator('[data-object-action=edit]').count()>0);await snap('06-objects');
  await tap('[data-mobile-nav=explore]');await visible('#mobileExplorePage');await page.waitForSelector('[data-explore-save="BIQUOTE:USDJPY"]');
  await tap('[data-explore-save="BIQUOTE:USDJPY"]');assert.equal(await page.locator('[data-explore-save="BIQUOTE:USDJPY"]').innerText(),'✓');await snap('07-explore');
