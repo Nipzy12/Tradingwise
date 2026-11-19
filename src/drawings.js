@@ -39,6 +39,13 @@ export class DrawingLayer{
    if(action==='delete')this.remove(id);
    if(action==='close')this.select(null);
   });
+  $('drawingQuickBar')?.addEventListener('change',e=>{
+   const key=({drawingQuickColor:'color',drawingQuickWidth:'width',drawingQuickDash:'dash'})[e.target.id];
+   const current=this.drawings.find(d=>d.id===this.selected);
+   if(!key||!current||this.tool!=='pointer')return;
+   const style=normalizeStyle(current.type,{...current.style,[key]:key==='width'?Number(e.target.value):e.target.value});
+   if(style[key]!==current.style[key])this.update(current.id,{style});
+  });
   $('drawingHintCancel')?.addEventListener('click',()=>this.setTool('pointer'));
   this.syncControls();
  }
@@ -183,6 +190,12 @@ export class DrawingLayer{
   const {w,h,right,bottom}=this.bounds();if(w<10||h<10)return;
   this.svg.setAttribute('viewBox','0 0 '+w+' '+h);this.svg.setAttribute('width',w);this.svg.setAttribute('height',h);
   const current=this.drawings.find(x=>x.id===this.selected),bar=$('drawingQuickBar');if(bar){bar.classList.toggle('hidden',!current||this.hidden||this.tool!=='pointer');$('drawingSelectedName').textContent=current?TOOL_CATALOG[current.type]?.label||current.type:'';bar.querySelector('[data-drawing-action="lock"]')?.classList.toggle('active',!!current?.locked);bar.querySelector('[data-drawing-action="hide"]')?.classList.toggle('active',!!current?.hidden)}
+  if(current&&bar){
+   const style=normalizeStyle(current.type,current.style);
+   for(const [id,value] of [['drawingQuickColor',style.color],['drawingQuickWidth',String(style.width)],['drawingQuickDash',style.dash]]){
+    const el=$(id);if(el&&el.value!==value)el.value=value;
+   }
+  }
   if(this.hidden||!this.ready){this.svg.innerHTML='';return}
   const parts=['<defs><clipPath id="drawClip"><rect x="0" y="0" width="'+right+'" height="'+bottom+'"/></clipPath></defs><g clip-path="url(#drawClip)">'];
   for(const d of [...this.drawings,...(this.preview?[this.preview]:[])]){
