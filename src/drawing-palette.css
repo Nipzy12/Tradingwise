@@ -1,0 +1,41 @@
+/* Android-inspired, original palette UI. */
+@media(max-width:760px){
+ #modalBackdrop[data-sheet=drawing-grid]{align-items:flex-end;background:#0008}
+ #modalBackdrop[data-sheet=drawing-grid] .modal{height:96dvh;max-height:96dvh;border:0;border-radius:14px 14px 0 0;background:#171717;color:#e1e1e1}
+ #modalBackdrop[data-sheet=drawing-grid] .modal-header{height:48px;min-height:48px;padding:0 15px;border:0;font-size:22px;font-weight:650}
+ #modalBackdrop[data-sheet=drawing-grid] #modalBody{display:flex;flex:1;min-height:0;padding:0;overflow:hidden}
+ .drawing-palette-v2{--dp-bg:#171717;--dp-card:#222;--dp-line:#2b2b2b;--dp-fg:#d6d6d6;--dp-muted:#999;display:flex;flex:1;min-height:0;position:relative;flex-direction:column;color:var(--dp-fg);background:var(--dp-bg)}
+ .drawing-grid-search{display:flex;align-items:center;gap:10px;margin:0 14px 9px;padding:0 12px;height:45px;flex:0 0 45px;background:var(--dp-card);border-radius:12px}
+ .drawing-grid-search svg{width:21px!important;height:21px!important;color:var(--dp-muted)}
+ #modalBackdrop[data-sheet=drawing-grid] #drawingToolSearch{border:0;background:none;width:100%;min-width:0;padding:0;color:var(--dp-fg);font-size:17px;outline:0;box-shadow:none}
+ .drawing-grid-tabs{display:flex;gap:7px;padding:2px 14px 9px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;white-space:nowrap;touch-action:pan-x}
+ .drawing-grid-tabs::-webkit-scrollbar{display:none}
+ .drawing-grid-tabs button{flex:0 0 auto;min-height:33px;padding:5px 11px;font-size:14px;font-weight:600;color:var(--dp-muted);border-radius:8px}
+ .drawing-grid-tabs button[aria-selected=true]{background:var(--dp-card);color:var(--dp-fg)}
+ .drawing-grid-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 14px 16px;touch-action:pan-y}
+ .drawing-tile-section{margin:0 0 13px}
+ .drawing-tile-section h3{font-size:12px;font-weight:550;color:var(--dp-muted);text-transform:uppercase;margin:13px 0 11px}
+ .drawing-tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+ .drawing-grid-tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-width:0;min-height:69px;padding:8px 4px 7px;background:var(--dp-card);border:1px solid transparent;border-radius:11px;touch-action:pan-y;user-select:none;-webkit-touch-callout:none;-webkit-user-select:none}
+ .drawing-grid-tile.active{border-color:#676e80}
+ .drawing-grid-tile>svg{width:27px!important;height:27px!important;stroke-width:1.65!important;color:var(--dp-fg)}
+ .drawing-tile-label{display:block;width:100%;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dp-fg);line-height:1.2}
+ .drawing-tile-star{position:absolute;top:4px;right:6px;font-size:17px;color:#e7a32e;line-height:1}
+ .drawing-grid-empty{display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center;color:var(--dp-muted);padding:55px 12px;font-size:13px}
+ .drawing-grid-empty strong{font-size:16px;color:var(--dp-fg)}
+ .drawing-grid-footer{border-top:1px solid var(--dp-line);padding:9px 14px;flex:0 0 auto}
+ .drawing-grid-footer label{display:flex;align-items:center;gap:12px;min-height:36px;font-size:15px;position:relative}
+ .drawing-grid-footer label>span:first-of-type{flex:1}
+ .drawing-grid-footer input{position:absolute;right:0;width:46px;height:34px;opacity:0;z-index:1;cursor:pointer}
+ .drawing-switch-track{width:42px;height:24px;flex:0 0 42px;background:#414141;border-radius:14px;position:relative}
+ .drawing-switch-track:before{content:'';position:absolute;width:18px;height:18px;top:3px;left:3px;background:#ddd;border-radius:50%;transition:transform .15s}
+ .drawing-grid-footer input:checked+.drawing-switch-track{background:#4585f5}
+ .drawing-grid-footer input:checked+.drawing-switch-track:before{transform:translateX(18px);background:white}
+ .drawing-grid-context{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;background:#0008;z-index:4;padding:12px}
+ .drawing-context-card{display:flex;flex-direction:column;width:100%;background:#272727;border-radius:13px;overflow:hidden;box-shadow:0 6px 25px #0008}
+ .drawing-context-card strong{padding:15px;font-size:13px;color:var(--dp-muted)}
+ .drawing-context-card button{min-height:48px;text-align:left;padding:12px 15px;font-size:15px;border-top:1px solid var(--dp-line)}
+ body[data-theme=light] #modalBackdrop[data-sheet=drawing-grid] .modal{background:white;color:#171717}
+ body[data-theme=light] .drawing-palette-v2{--dp-bg:#fff;--dp-card:#f0f1f3;--dp-line:#e0e0e0;--dp-fg:#222;--dp-muted:#777}
+ body[data-theme=light] .drawing-context-card{background:#fff}
+}
