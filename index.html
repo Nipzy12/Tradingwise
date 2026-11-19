@@ -8,6 +8,7 @@
   <title>Tradingwise Supercharts · LUMAVUN</title>
   <link rel="stylesheet" href="./src/style.css" />
   <link rel="stylesheet" href="./src/ui-modern.css" />
+  <link rel="stylesheet" href="./src/mobile.css" />
   <script>
     window.lwcReady = new Promise(resolve => {
       const script = document.createElement('script');
@@ -23,6 +24,8 @@
 </head>
 <body data-theme="dark">
   <svg class="sprites" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9Z"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
@@ -125,8 +128,16 @@
       </aside>
       <main class="middle">
         <section class="chart-window" id="chartWindow">
+          <div class="mobile-chart-header mobile-only" id="mobileChartHeader">
+            <button type="button" id="mobileHeaderSymbol" class="mobile-header-symbol" aria-label="Cari simbol"><span id="mobileSymbolIcon" class="mobile-symbol-icon">Au</span><strong id="mobileHeaderName">XAUUSD</strong></button>
+            <span id="mobileMarketBadge" class="mobile-market-badge" role="status">Loading</span>
+            <button type="button" id="mobileFavorite" class="mobile-header-star" aria-label="Favorit simbol" aria-pressed="false">☆</button>
+            <div class="mobile-header-spacer"></div>
+            <button type="button" id="mobileCurrency" class="mobile-currency" aria-label="Mata uang skala harga"><span id="mobileCurrencyCode">USD</span><svg aria-hidden="true"><use href="#i-chevron"/></svg></button>
+          </div>
+          <div class="mobile-chart-info mobile-only"><button type="button" id="mobileLegendToggle" aria-label="Tampilkan OHLC dan indikator" aria-expanded="false"><svg aria-hidden="true"><use href="#i-chevron"/></svg><span id="mobileIndicatorCount">0</span></button><span id="mobileRateNote" hidden></span></div>
           <div class="chart-header-overlay" id="chartLegend"><div class="symbol-line"><strong id="legendTitle">BTCUSDT · Market data</strong> <span>·</span> <span id="legendInterval">1H</span> <span>·</span> <span id="legendExchange">BINANCE</span> <span id="dataBadge" class="status-pill">Menyiapkan…</span></div><div class="ohlc-line"><span>O <b id="oVal">–</b></span><span>H <b id="hVal">–</b></span><span>L <b id="lVal">–</b></span><span>C <b id="cVal">–</b></span><span id="chgVal"></span></div><div class="indicator-chips" id="indicatorChips"></div></div>
-          <div id="chartStage"><canvas id="fallbackCanvas"></canvas><div id="lightweightHost"></div><svg id="smcOverlay" xmlns="http://www.w3.org/2000/svg" aria-label="SMC indicator drawings"></svg><svg id="drawingOverlay" xmlns="http://www.w3.org/2000/svg" aria-label="Chart drawings"></svg><div class="smc-notice hidden" id="smcNotice" role="status"></div><div class="chart-watermark"><span>◕</span><strong>LUMAVUN</strong></div><div id="chartLoader" class="chart-loader">Memuat data pasar...</div></div>
+          <div id="chartStage"><canvas id="fallbackCanvas"></canvas><div id="lightweightHost"></div><svg id="smcOverlay" xmlns="http://www.w3.org/2000/svg" aria-label="SMC indicator drawings"></svg><svg id="drawingOverlay" xmlns="http://www.w3.org/2000/svg" aria-label="Chart drawings"></svg><div class="smc-notice hidden" id="smcNotice" role="status"></div><div class="chart-watermark"><span>◕</span><strong>LUMAVUN</strong></div><div class="mobile-scale-buttons mobile-only"><button type="button" id="mobileAuto" aria-label="Skala harga otomatis" title="Skala otomatis">A</button><button type="button" id="mobileLog" aria-label="Skala logaritmik" aria-pressed="false" title="Logaritmik">L</button></div><div id="chartLoader" class="chart-loader">Memuat data pasar...</div></div>
           <div id="replayControls" class="replay-controls hidden"><span>BAR REPLAY</span><button class="mini-btn" id="replayBack" title="Kembali 1 bar">◀</button><button class="mini-btn" id="replayPlay" title="Play"><svg><use href="#i-play"/></svg></button><button class="mini-btn" id="replayForward" title="Maju 1 bar">▶</button><span id="replayCounter">0 / 0</span><button class="mini-btn" id="replayExit">Selesai</button></div>
           <div class="chart-footer"><div class="range-buttons"><button data-range="1d">1D</button><button data-range="5d">5D</button><button data-range="1m">1M</button><button data-range="3m">3M</button><button data-range="all" class="active">All</button></div><span id="chartClock">UTC</span><span class="chart-separator">|</span><span id="priceCurrency">USDT</span><button class="mini-btn" id="resetChart" title="Reset zoom">Auto</button></div>
         </section>
@@ -147,6 +158,33 @@
         </div>
         <nav class="right-icons"><button class="rail active" data-right="watchlist" title="Watchlist"><svg><use href="#i-list"/></svg></button><button class="rail" data-right="alerts" title="Alerts"><svg><use href="#i-bell"/></svg></button><button class="rail" data-right="objects" title="Object tree"><svg><use href="#i-grid"/></svg></button><div class="grow"></div><button class="rail" id="rightToggle" title="Toggle sidebar"><svg><use href="#i-chevron"/></svg></button></nav>
       </aside>
+    </div>
+    <div class="mobile-bottom mobile-only" id="mobileBottom">
+      <div class="mobile-toolbar" aria-label="Toolbar chart">
+        <div id="mobilePairWheel" class="mobile-wheel mobile-pair-wheel" role="listbox" aria-label="Pair favorit, geser vertikal" tabindex="0"></div>
+        <div id="mobileTfWheel" class="mobile-wheel mobile-tf-wheel" role="listbox" aria-label="Timeframe favorit, geser vertikal" tabindex="0"></div>
+        <div class="mobile-actions" id="mobileActions" aria-label="Geser ke kiri atau kanan untuk tools">
+          <button type="button" data-mobile-action="drawing" title="Drawing tools" aria-label="Drawing tools"><svg aria-hidden="true"><use href="#i-trend"/></svg></button>
+          <button type="button" data-mobile-action="indicatorsBtn" title="Indikator" aria-label="Indikator"><svg aria-hidden="true"><use href="#i-activity"/></svg></button>
+          <button type="button" data-mobile-action="more" title="Opsi chart" aria-label="Opsi chart"><svg aria-hidden="true"><use href="#i-more"/></svg></button>
+          <span class="mobile-divider"></span>
+          <button type="button" data-mobile-action="undoBtn" title="Undo" aria-label="Undo"><svg aria-hidden="true"><use href="#i-undo"/></svg></button>
+          <button type="button" data-mobile-action="redoBtn" title="Redo" aria-label="Redo"><svg aria-hidden="true"><use href="#i-redo"/></svg></button>
+          <button type="button" data-mobile-action="focus" title="Fullscreen" aria-label="Fullscreen"><svg aria-hidden="true"><use href="#i-max"/></svg></button>
+          <button type="button" data-mobile-action="cameraBtn" title="Snapshot / ekspor chart" aria-label="Snapshot / ekspor chart"><svg aria-hidden="true"><use href="#i-upload"/></svg></button>
+          <button type="button" data-mobile-action="chartSettingsBtn" title="Pengaturan chart" aria-label="Pengaturan chart"><svg aria-hidden="true"><use href="#i-settings"/></svg></button>
+          <button type="button" data-mobile-action="chartTypeBtn" title="Jenis chart" aria-label="Jenis chart"><svg aria-hidden="true"><use href="#i-candles"/></svg></button>
+          <button type="button" data-mobile-action="alertBtn" title="Buat alert" aria-label="Buat alert"><svg aria-hidden="true"><use href="#i-bell"/></svg></button>
+          <button type="button" data-mobile-action="replayBtn" title="Bar replay" aria-label="Bar replay"><svg aria-hidden="true"><use href="#i-rewind"/></svg></button>
+        </div>
+      </div>
+      <nav class="mobile-nav" aria-label="Navigasi mobile">
+        <button type="button" data-mobile-nav="watchlist"><svg aria-hidden="true"><use href="#i-bookmark"/></svg><span>Daftar Pantau</span></button>
+        <button type="button" data-mobile-nav="chart" class="active" aria-current="page"><svg aria-hidden="true"><use href="#i-chart"/></svg><span>Chart</span></button>
+        <button type="button" data-mobile-nav="explore"><svg aria-hidden="true"><use href="#i-compass"/></svg><span>Jelajahi</span></button>
+        <button type="button" data-mobile-nav="alerts"><svg aria-hidden="true"><use href="#i-bell"/></svg><span>Alert</span></button>
+        <button type="button" data-mobile-nav="menu"><svg aria-hidden="true"><use href="#i-menu"/></svg><span>Menu</span></button>
+      </nav>
     </div>
     <footer class="statusbar"><div class="status-left"><span class="connection-dot" id="connectionDot"></span><span id="connectionText">Memulai terminal...</span><span class="status-divider">|</span><span id="engineLabel">Chart engine</span></div><div class="status-right"><span>Supercharts Workspace</span><a id="tvCredit" class="tv-credit" href="https://www.tradingview.com" target="_blank" rel="noopener noreferrer">TradingView™</a><span class="status-divider">|</span><span id="localTime">--:--:--</span><button id="exportWorkspace" title="Export workspace JSON"><svg><use href="#i-download"/></svg></button><button id="importWorkspace" title="Import workspace JSON"><svg><use href="#i-upload"/></svg></button><input type="file" id="workspaceFile" accept="application/json,.json" hidden></div></footer>
   </div>
