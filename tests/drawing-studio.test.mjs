@@ -78,3 +78,20 @@ test('drawing studio is wired across mobile, desktop and object tree; original p
  for(const id of ['drawingToolsBtn','drawingQuickBar','drawingHint','keepDrawingBtn','lockDrawingsBtn','drawingDataValues'])assert.ok(html.includes('id="'+id+'"'));
  assert.match(mobile,/ui\.drawingToolsModal\(\)/);assert.match(app,/openDrawingProperties/);assert.match(app,/drawingLayer\.setReady\(false\)/);assert.match(app,/subscribeMarket\(/);
 });
+
+test('every implemented drawing can be placed, selected, duplicated, undone and removed',()=>{
+ for(const type of TOOL_IDS){
+  const l=layer();l.tool=type;
+  const prev=globalThis.prompt;globalThis.prompt=()=> 'Test';
+  try{
+   const count=TOOL_CATALOG[type].points;
+   if(type==='brush'||type==='highlighter'){const a=event(1,100),b=event(2,104),c=event(3,101);l.down(a);l.move(b);l.move(c);l.up(c)}
+   else for(let i=0;i<count;i++){const e=event(i+1,100+(i%2?7:-2)+i);l.down(e);l.up(e)}
+   assert.equal(l.drawings.length,1,type+' created');const id=l.drawings[0].id;
+   assert.equal(l.selected,id,type+' selected');assert.equal(l.pending,null,type+' placement finished');
+   const copy=l.duplicate(id);assert.ok(copy&&copy!==id,type+' duplicate');assert.equal(l.drawings.length,2);
+   l.undo();assert.equal(l.drawings.length,1);l.redo();assert.equal(l.drawings.length,2);
+   l.remove(copy);l.remove(id);assert.equal(l.drawings.length,0,type+' removed');
+  }finally{if(prev===undefined)delete globalThis.prompt;else globalThis.prompt=prev}
+ }
+});
