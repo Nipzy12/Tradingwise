@@ -1,5 +1,5 @@
 // Real mobile Chromium viewport; only the market transport is mocked for reproducible UI QA.
-// Run with npm install --no-save --no-package-lock playwright@1.51.1 lightweight-charts@5.0.8.
+// Run with npm install --no-save --no-package-lock playwright@1.65.1 lightweight-charts@5.0.8.
 import {chromium} from 'playwright';
 import {createServer} from 'node:http';
 import {readFile,mkdir} from 'node:fs/promises';
