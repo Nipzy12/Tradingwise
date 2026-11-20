@@ -4,7 +4,9 @@ import {
  readUiPreferences, writeUiPreferences, normalizeUiPreferences,
  toggleFavorite, hasFavorite, orderWatchlist, TIMEFRAMES, DEFAULT_UI_PREFS
 } from './ui-preferences.js';
-import {TOOL_GROUPS,TOOL_CATALOG,isVariablePath} from './drawing-model.js';
+import {TOOL_CATALOG,isVariablePath} from './drawing-model.js';
+import {DESKTOP_GROUPS,desktopGroupItems} from './drawing-desktop-model.js';
+import {mountDesktopDrawingToolbar} from './drawing-desktop.js';
 import {mountDrawingPalette} from './drawing-palette.js';
 
 const el=id=>document.getElementById(id);
@@ -69,7 +71,7 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
     const query=search.value.toLowerCase().trim(),pins=prefs.favorites.tools;
     const matches=t=>(t.label+' '+t.id+' '+t.group).toLowerCase().includes(query);
     const toolRow=t=>'<div class="drawing-tool-row"><button type="button" data-draw-pick="'+esc(t.id)+'" class="'+(drawingLayer.tool===t.id?'active':'')+'">'+icon(t.icon)+'<span>'+esc(t.label)+'</span><small>'+(t.points===0?'Mode':t.id==='brush'||t.id==='highlighter'?'Drag':isVariablePath(t.id)?'Multi titik':t.points+' titik')+'</small></button>'+(t.points>0?'<button type="button" class="drawing-pin'+(current('tools',t.id)?' is-favorite':'')+'" data-draw-pin="'+esc(t.id)+'" aria-label="Favorit '+esc(t.label)+'">'+(current('tools',t.id)?'★':'☆')+'</button>':'')+'</div>';
-    const groups=[['Favorit',pins.map(id=>TOOL_CATALOG[id]).filter(Boolean)],...TOOL_GROUPS.map(([label,items])=>[label,items.map(x=>TOOL_CATALOG[x[0]])])];
+    const groups=[['Favorit',pins.map(id=>TOOL_CATALOG[id]).filter(Boolean)],...DESKTOP_GROUPS.map(group=>[group.label,desktopGroupItems(group.id)])];
     list.innerHTML=groups.map(([label,items])=>{const visible=items.filter(matches);return visible.length?'<section class="drawing-category"><h3>'+esc(label)+'</h3>'+visible.map(toolRow).join('')+'</section>':''}).join('')||'<div class="side-info">Tool tidak ditemukan.</div>';
    }
    search.oninput=paint;
@@ -196,6 +198,7 @@ export function mountWorkspaceUI({state,chart,drawingLayer,marketInfo,CATALOG,to
  function install(){
   el('symbolFavoriteBtn').onclick=()=>favorite('symbols',state.symbol);
   el('drawingToolsBtn').onclick=drawingToolsModal;
+  mountDesktopDrawingToolbar({layer:drawingLayer,hasFavorite:id=>current('tools',id),onFavorite:id=>favorite('tools',id)});
   window.addEventListener('tw:draw-tool',()=>{render()});
   el('tfMoreBtn').onclick=timeframesModal;
   el('chartSettingsBtn').onclick=chartSettingsModal;
