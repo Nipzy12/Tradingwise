@@ -19,7 +19,8 @@ test('additional geometric Fibonacci and Gann tools are selectable and produce f
   const chart={candles,logicalToCoordinate:l=>30+l*28,priceToCoordinate:p=>350-p*2,formatPrice:String};
   const done=renderAdvanced({d:object,a:pt(object.a),b:pt(object.b),c:pt(object.c),right:600,bottom:400,line,label:()=>{},rect,group,stroke:' stroke="#598eff"',style:object.style,color:object.style.color,chart,point:pt,n:x=>x,xy:p=>p.x+','+p.y,enc:String,round:x=>x});
   assert.equal(done,true,type+' rendered');
-  assert.ok(group.length>2,type+' has independent visible geometry');
+  if(type==='fibSpiral')assert.ok(group.some(s=>s.startsWith('<path')&&s.split(' L').length>40),type+' contains a continuous curved spiral');
+  else assert.ok(group.length>2,type+' has independent visible geometry');
   assert.ok(!group.join('').includes('NaN'),type+' is finite');
  }
 });
