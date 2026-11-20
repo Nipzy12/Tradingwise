@@ -164,6 +164,31 @@ try{
  assert.ok(await desktop.locator('#desktopDrawingFlyout [data-draw-pick=long]').count()>0);
  await desktop.screenshot({path:resolve(out,'13-desktop-drawing-groups.png')});
  await desktop.keyboard.press('Escape');
+ // Cross-category functional smoke: a real chart object must appear after each tool's anchor sequence.
+ desktop.on('dialog',d=>d.accept('Catatan QA'));
+ const examples=[
+  ['patterns','xabcd',5],
+  ['projection','long',2],
+  ['shapes','rectangle',2],
+  ['annotation','text',1],
+  ['visual','emoji',1],
+  ['smc','obZone',2],
+  ['measure','ruler',2]
+ ];
+ for(const [group,tool,points] of examples){
+  const old=await desktop.locator('#drawingOverlay [data-drawing-id]').count();
+  await desktop.locator('[data-drawing-group="'+group+'"]').click();
+  await desktop.locator('#desktopDrawingFlyout [data-draw-pick="'+tool+'"]').click();
+  for(let i=0;i<points;i++){
+   await desktop.mouse.click(r.x+r.width*(.21+i*.065),r.y+r.height*(i%2?.48:.32));
+  }
+  await desktop.waitForFunction(before=>document.querySelectorAll('#drawingOverlay [data-drawing-id]').length>before,old,{timeout:6000});
+  assert.equal(await desktop.locator('#drawingOverlay [data-drawing-id]').count(),old+1,tool+' completed');
+ }
+ await desktop.locator('[data-drawing-group=cursor]').click();
+ await desktop.locator('#desktopDrawingFlyout [data-draw-pick=pointer]').click();
+ assert.equal(await desktop.locator('#drawingOverlay').evaluate(el=>el.style.pointerEvents),'none','pointer returns to chart mode');
+ await desktop.screenshot({path:resolve(out,'14-desktop-functional-categories.png')});
  await desktop.locator('[data-range=ytd]').click();
  assert.match(await desktop.locator('[data-range=ytd]').getAttribute('class')||'',/active/,'YTD chart range active');
  await desktop.locator('[data-panel=pine]').click();
