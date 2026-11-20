@@ -56,6 +56,32 @@ export function renderAdvanced({d,a,b,c,right,bottom,line,label,rect,group,strok
  if(t==='fibFan'||t==='gannFan'){for(const v of t==='gannFan'?[.125,.25,.333,.5,1,2,3,4,8]:fib){const q={x:b.x,y:a.y+(b.y-a.y)*v};line(a,q,'','ray');label(q.x+4,q.y-4,String(v))}return true}
  if(t==='fibCircle'||t==='fibArc'||t==='circle'){const R=Math.hypot(b.x-a.x,b.y-a.y);for(const v of t==='circle'?[1]:[.382,.5,.618,1,1.618]){const radius=R*v;if(t==='fibArc'){curve('M'+xy({x:a.x-radius,y:a.y})+' A'+n(radius)+' '+n(radius)+' 0 0 1 '+xy({x:a.x+radius,y:a.y}))}else circle(a,radius)}return true}
  if(t==='fibWedge'){if(c){for(const v of [0,...fib.filter(x=>x<=1)])line(a,mix(b,c,v),'','ray')}else line(a,b);return true}
+ if(t==='fibSpiral'){
+  // Logarithmic golden spiral (geometric approximation, not predictive data).
+  const radius=Math.hypot(b.x-a.x,b.y-a.y),phi=(1+Math.sqrt(5))/2;
+  if(radius<2){line(a,b);return true}
+  const theta=Math.atan2(b.y-a.y,b.x-a.x),turns=2.25,steps=108;
+  let path='';
+  for(let i=0;i<=steps;i++){
+   const t=(i/steps-1)*turns*2*Math.PI;
+   const r=radius*Math.pow(phi,2*t/Math.PI),p={x:a.x+r*Math.cos(theta+t),y:a.y+r*Math.sin(theta+t)};
+   path+=(i?' L':'M')+xy(p);
+  }
+  curve(path);line(a,b,'opacity=".35"');label(b.x,b.y-5,'Fib spiral · geometric');return true;
+ }
+ if(t==='gannSquareFixed'||t==='gannSquare'){
+  // Both are square-grid drawing approximations in rendered price/time space.
+  // 'Fixed' uses horizontal anchor separation as the visual square side.
+  const dx=b.x-a.x,dy=b.y-a.y,side=Math.max(6,t==='gannSquareFixed'?Math.abs(dx):Math.max(Math.abs(dx),Math.abs(dy)));
+  const sx=dx<0?-1:1,sy=dy<0?-1:1,x2=a.x+side*sx,y2=a.y+side*sy;
+  rect(a.x,a.y,x2,y2);
+  for(let i=1;i<8;i++){
+   const v=i/8,x=a.x+(x2-a.x)*v,y=a.y+(y2-a.y)*v;
+   line({x,y:a.y},{x,y:y2},'opacity=".55"');line({x:a.x,y},{x:x2,y},'opacity=".55"');
+  }
+  line(a,{x:x2,y:y2});line({x:a.x,y:y2},{x:x2,y:a.y});
+  label(Math.min(a.x,x2)+4,Math.min(a.y,y2)+12,'Gann square · geometric');return true;
+ }
  if(t==='gannBox'){rect(a.x,a.y,b.x,b.y);for(const v of [.25,.5,.75]){const x=a.x+(b.x-a.x)*v,y=a.y+(b.y-a.y)*v;line({x,y:a.y},{x,y:b.y});line({x:a.x,y},{x:b.x,y})}line(a,b);line({x:a.x,y:b.y},{x:b.x,y:a.y});return true}
  if(Object.hasOwn(PATTERNS,t)){polygon(points,false);const names=PATTERNS[t];points.forEach((p,i)=>text(p,names[i]??String(i+1)));return true}
  if(t==='datePriceRange'){rect(a.x,a.y,b.x,b.y);const r=rangeStats(d,chart.candles);label(Math.min(a.x,b.x)+4,Math.min(a.y,b.y)-5,round(r.diff)+' ('+round(r.percent)+'%) · '+r.bars+' bars');return true}
