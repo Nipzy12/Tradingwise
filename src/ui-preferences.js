@@ -20,7 +20,7 @@ export const DEFAULT_UI_PREFS=Object.freeze({
  watchlistSort:'manual',
  showFavoritesBar:true,
  panelCollapsed:true,
- sidebarCollapsed:true
+ sidebarCollapsed:false
 });
 const safeList=(items,validate,max=80)=>{
  if(!Array.isArray(items))return [];
@@ -59,7 +59,7 @@ export function normalizeUiPreferences(input={}){
   watchlistSort:['manual','symbol','favorites','change'].includes(raw.watchlistSort)?raw.watchlistSort:'manual',
   showFavoritesBar:bool(raw.showFavoritesBar,true),
   panelCollapsed:bool(raw.panelCollapsed,true),
-  sidebarCollapsed:bool(raw.sidebarCollapsed,true)
+  sidebarCollapsed:bool(raw.sidebarCollapsed,defaults.sidebarCollapsed)
  };
 }
 export function readUiPreferences(storage){

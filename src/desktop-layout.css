@@ -1,0 +1,75 @@
+/* Tradingwise desktop workspace: independent TradingView-style information hierarchy.
+   Mobile sheet and bottom navigation intentionally remain untouched. */
+@media (min-width:761px){
+ #app{position:relative}
+ .topbar{height:47px;min-height:47px;flex:0 0 47px;padding:0 10px 0 6px;gap:6px}
+ .topbar .top-left{flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-x:contain;align-items:center}
+ .topbar .top-left::-webkit-scrollbar{display:none}
+ .topbar .top-left>*{flex-shrink:0}
+ .topbar .top-right{flex:0 0 auto;min-width:0}
+ .topbar .brand-mark{font-size:19px}
+ .topbar .brand-word{font-size:11px;letter-spacing:.35px}
+ .topbar .brand-suffix{display:none}
+ .topbar .pair-trigger{height:34px}
+ .topbar .save-btn{height:30px}
+ .topbar .vsep{margin:0 3px}
+ .leftbar{flex:0 0 49px;width:49px;padding:6px 4px 5px;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;overscroll-behavior:contain;gap:3px}
+ .leftbar::-webkit-scrollbar{display:none}
+ .leftbar .tool{width:39px;min-height:38px;height:38px;flex:0 0 38px}
+ .leftbar .tool svg{width:21px!important;height:21px!important}
+ .leftbar .hline{width:28px;flex:0 0 1px;margin:3px auto}
+ .leftbar .left-spacer{min-height:3px}
+ .drawing-group-trigger{position:relative}
+ .drawing-group-trigger [data-group-icon]{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+ .drawing-group-trigger:after{content:"";position:absolute;right:3px;bottom:3px;width:0;height:0;border-left:4px solid transparent;border-bottom:4px solid currentColor;opacity:.55}
+ .drawing-group-trigger[aria-expanded="true"]{color:var(--accent);background:var(--hover)}
+ .drawing-group-trigger:focus-visible{outline:2px solid var(--accent)}
+ /* Float favorites over the chart, rather than consuming a second permanent header row. */
+ #favoritesBar:not(.hidden){position:absolute;top:54px;left:clamp(310px,36vw,580px);right:auto;z-index:14;display:flex;height:33px;min-height:33px;max-width:min(515px,calc(100vw - 685px));width:max-content;flex:none;padding:2px 7px;border:1px solid var(--border);border-radius:7px;background:var(--panel);box-shadow:0 5px 22px #0008}
+ #favoritesBar .favorite-bar-segment{flex:0 0 auto}
+ #favoritesBar .favorite-bar-items{max-width:165px}
+ #favoritesBar .favorites-divider{margin:0 1px}
+ #favoritesBar .favorite-bar-caption{display:none}
+ #favoritesBar .grow{display:none}
+ .rightbar:not(.shrunk){width:310px;flex-basis:310px}
+ .rightbar .right-inner{min-width:0}
+ .rightbar .right-icons{width:44px;flex-basis:44px}
+ .rightbar .side-view{min-height:0}
+ .chart-footer{height:32px;flex-basis:32px;gap:7px}
+ .range-buttons{overflow-x:auto;min-width:0;scrollbar-width:none}
+ .range-buttons::-webkit-scrollbar{display:none}
+ .range-buttons button{white-space:nowrap;min-width:27px}
+ .statusbar{height:22px;min-height:22px}
+ .desktop-drawing-flyout{position:fixed;z-index:41;display:flex;flex-direction:column;overflow:hidden;width:312px;min-width:255px;max-height:min(600px,calc(100dvh - 100px));border:1px solid #3b404a;border-radius:9px;background:var(--panel);box-shadow:0 15px 48px #000b;color:var(--text)}
+ .desktop-drawing-title{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;flex:0 0 auto;border-bottom:1px solid var(--border)}
+ .desktop-drawing-title strong{font-size:13px;flex:1}
+ .desktop-drawing-title span{color:var(--muted);font-size:10px;white-space:nowrap}
+ .desktop-drawing-title button{font-size:19px;width:26px;height:26px;border-radius:4px}
+ .desktop-drawing-title button:hover{background:var(--hover)}
+ .desktop-drawing-search{flex:0 0 auto;display:flex;align-items:center;gap:8px;margin:9px 10px 6px;padding:0 9px;border:1px solid var(--border);border-radius:5px;background:var(--deep);height:36px}
+ .desktop-drawing-search svg{width:16px!important;height:16px!important;color:var(--muted)}
+ .desktop-drawing-search input{width:100%;min-width:0;outline:none;color:var(--text);background:transparent;border:0;font-size:12px}
+ .desktop-drawing-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:5px 7px;scrollbar-width:thin}
+ .desktop-drawing-item{display:flex;align-items:center;min-width:0;gap:2px;border-radius:5px}
+ .desktop-drawing-item:hover{background:var(--hover)}
+ .desktop-drawing-pick{display:flex;flex:1;min-width:0;align-items:center;gap:11px;text-align:left;min-height:43px;padding:5px 6px;border-radius:5px}
+ .desktop-drawing-pick:hover{color:var(--text)}
+ .desktop-drawing-pick svg{width:23px!important;height:23px!important;flex:0 0 23px}
+ .desktop-drawing-label{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+ .desktop-drawing-label strong{font-size:12px;font-weight:550;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+ .desktop-drawing-label small{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .desktop-drawing-points{font-size:10px;color:var(--muted);flex:0 0 auto}
+ .desktop-drawing-pin{width:30px;min-height:34px;flex:0 0 30px;border-radius:4px;color:var(--muted);font-size:18px}
+ .desktop-drawing-pin:hover,.desktop-drawing-pin.is-favorite{color:#ecc36f;background:var(--hover)}
+ .desktop-drawing-help{flex:0 0 auto;margin:0;padding:8px 11px;border-top:1px solid var(--border);font-size:10px;color:var(--muted)}
+ .desktop-drawing-empty{padding:16px 10px;color:var(--muted);text-align:center;font-size:11px}
+ body[data-theme="light"] .desktop-drawing-flyout{background:#fff;border-color:#d7dce5;box-shadow:0 12px 32px #0002}
+}
+@media (min-width:761px) and (max-width:1100px){
+ .topbar .brand-word{display:none}
+ #favoritesBar:not(.hidden){left:300px;max-width:calc(100vw - 570px)}
+ .rightbar.expanded:not(.shrunk){top:47px!important;bottom:22px!important}
+}
+@media (max-width:760px){
+ #desktopDrawingFlyout{display:none!important}
+}

@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="./src/drawing-studio.css" />
   <link rel="stylesheet" href="./src/mobile-app.css" />
   <link rel="stylesheet" href="./src/drawing-palette.css" />
+  <link rel="stylesheet" href="./src/desktop-layout.css" />
   <script>
     window.lwcReady = new Promise(resolve => {
       const script = document.createElement('script');
@@ -89,17 +90,22 @@
         <button class="header-action" id="indicatorsBtn"><svg><use href="#i-activity"/></svg><span>Indicators</span></button>
         <button class="header-action optional" id="alertBtn"><svg><use href="#i-bell"/></svg><span>Alert</span></button>
         <button class="header-action optional" id="replayBtn"><svg><use href="#i-rewind"/></svg><span>Replay</span></button>
-      </div>
-      <div class="top-right">
+        <span class="vsep optional"></span>
         <button class="iconbtn optional" id="undoBtn" title="Undo drawing"><svg><use href="#i-undo"/></svg></button>
         <button class="iconbtn optional" id="redoBtn" title="Redo drawing"><svg><use href="#i-redo"/></svg></button>
-        <span class="vsep optional"></span>
         <button class="iconbtn optional" id="layoutBtn" title="Atur layout"><svg><use href="#i-grid"/></svg></button>
+        <button class="save-btn" id="saveBtn"><svg><use href="#i-save"/></svg><span>Save</span></button>
+      </div>
+      <div class="top-right">
+        
+        
+        <span class="vsep optional"></span>
+        
         <button class="iconbtn" id="chartSettingsBtn" title="Chart Settings" aria-label="Pengaturan Chart"><svg><use href="#i-settings"/></svg></button>
         <button class="iconbtn" id="themeBtn" title="Ganti tema"><svg><use href="#i-moon"/></svg></button>
         <button class="iconbtn optional" id="cameraBtn" title="Snapshot chart"><svg><use href="#i-camera"/></svg></button>
         <button class="iconbtn" id="fullscreenBtn" title="Fullscreen"><svg><use href="#i-max"/></svg></button>
-        <button class="save-btn" id="saveBtn"><svg><use href="#i-save"/></svg><span>Save</span></button>
+        
       </div>
     </header>
     <div class="favorites-bar" id="favoritesBar" aria-label="Toolbar favorit">
@@ -113,28 +119,27 @@
     </div>
     <div class="workbench">
       <aside class="leftbar" aria-label="Drawing tools">
-        <button type="button" class="tool draw-catalog-trigger" id="drawingToolsBtn" title="Semua drawing tools" aria-label="Semua drawing tools"><svg><use href="#i-grid"/></svg></button>
-        <button class="tool active" data-tool="pointer" title="Cursor / Pilih"><svg><use href="#i-pointer"/></svg></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="cursor" title="Kursor / Pilih" aria-label="Kursor / Pilih" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-pointer"/></svg></span></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="trend" title="Garis tren" aria-label="Garis tren" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-trend"/></svg></span></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="fib" title="Gann dan Fibonacci" aria-label="Gann dan Fibonacci" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-fibo"/></svg></span></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="patterns" title="Motif / pola" aria-label="Motif / pola" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-trend"/></svg></span></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="projection" title="Proyeksi dan posisi" aria-label="Proyeksi dan posisi" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-chart"/></svg></span></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="shapes" title="Bentuk geometris" aria-label="Bentuk geometris" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-rectangle"/></svg></span></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="annotation" title="Anotasi dan teks" aria-label="Anotasi dan teks" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-text"/></svg></span></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="visual" title="Ikon dan visual" aria-label="Ikon dan visual" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-star"/></svg></span></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="smc" title="SMC / ICT" aria-label="SMC / ICT" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-grid"/></svg></span></button>
+        <button type="button" class="tool drawing-group-trigger" data-drawing-group="measure" title="Pengukuran" aria-label="Pengukuran" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false"><span data-group-icon><svg><use href="#i-ruler"/></svg></span></button>
         <div class="hline"></div>
-        <button class="tool" data-tool="trend" title="Trend line"><svg><use href="#i-trend"/></svg></button>
-        <button class="tool" data-tool="horizontal" title="Horizontal line"><svg><use href="#i-horizontal"/></svg></button>
-        <button class="tool" data-tool="vertical" title="Vertical line"><svg><use href="#i-vertical"/></svg></button>
-        <button class="tool" data-tool="rectangle" title="Rectangle / Zone"><svg><use href="#i-rectangle"/></svg></button>
-        <button class="tool" data-tool="fibo" title="Fibonacci retracement"><svg><use href="#i-fibo"/></svg></button>
-        <div class="hline"></div>
-        <button class="tool" data-tool="text" title="Text annotation"><svg><use href="#i-text"/></svg></button>
-        <button class="tool" data-tool="long" title="Long position (risk/reward)"><span class="pos-icon green">L</span></button>
-        <button class="tool" data-tool="short" title="Short position (risk/reward)"><span class="pos-icon red">S</span></button>
-        <button class="tool" data-tool="ruler" title="Measure"><svg><use href="#i-ruler"/></svg></button>
-        <div class="hline"></div>
-        <button class="tool" id="magnetBtn" title="Magnet snapping"><svg><use href="#i-magnet"/></svg></button>
-        <button class="tool" id="keepDrawingBtn" title="Keep drawing" aria-label="Keep drawing" aria-pressed="false"><svg><use href="#i-keep"/></svg></button>
-        <button class="tool" id="lockDrawingsBtn" title="Lock all drawings" aria-label="Lock all drawings" aria-pressed="false"><svg><use href="#i-lock"/></svg></button>
-        <button class="tool" id="hideDrawingsBtn" title="Show/hide drawings"><svg><use href="#i-eye"/></svg></button>
-        <button class="tool" id="clearDrawingsBtn" title="Delete drawings"><svg><use href="#i-trash"/></svg></button>
+        <button type="button" class="tool" id="magnetBtn" title="Magnet snapping" aria-label="Magnet snapping"><svg><use href="#i-magnet"/></svg></button>
+        <button type="button" class="tool" id="keepDrawingBtn" title="Keep drawing" aria-label="Keep drawing" aria-pressed="false"><svg><use href="#i-keep"/></svg></button>
+        <button type="button" class="tool" id="lockDrawingsBtn" title="Lock all drawings" aria-label="Lock all drawings" aria-pressed="false"><svg><use href="#i-lock"/></svg></button>
+        <button type="button" class="tool" id="hideDrawingsBtn" title="Show/hide drawings" aria-label="Show/hide drawings"><svg><use href="#i-eye"/></svg></button>
+        <button type="button" class="tool" id="clearDrawingsBtn" title="Delete drawings" aria-label="Delete drawings"><svg><use href="#i-trash"/></svg></button>
         <div class="left-spacer"></div>
-        <button class="tool" id="infoBtn" title="Tentang terminal"><svg><use href="#i-info"/></svg></button>
+        <button type="button" class="tool draw-catalog-trigger" id="drawingToolsBtn" title="Semua drawing tools" aria-label="Semua drawing tools"><svg><use href="#i-grid"/></svg></button>
+        <button type="button" class="tool" id="infoBtn" title="Tentang terminal" aria-label="Tentang terminal"><svg><use href="#i-info"/></svg></button>
       </aside>
+      <div id="desktopDrawingFlyout" class="desktop-drawing-flyout hidden" role="dialog" aria-label="Kategori drawing" aria-modal="false"></div>
       <main class="middle">
         <section class="chart-window" id="chartWindow">
           <div class="mobile-chart-header mobile-only" id="mobileChartHeader">
@@ -148,7 +153,7 @@
           <div class="chart-header-overlay" id="chartLegend"><div class="symbol-line"><strong id="legendTitle">BTCUSDT · Market data</strong> <span>·</span> <span id="legendInterval">1H</span> <span>·</span> <span id="legendExchange">BINANCE</span> <span id="dataBadge" class="status-pill">Menyiapkan…</span></div><div class="ohlc-line"><span>O <b id="oVal">–</b></span><span>H <b id="hVal">–</b></span><span>L <b id="lVal">–</b></span><span>C <b id="cVal">–</b></span><span id="chgVal"></span></div><div class="indicator-chips" id="indicatorChips"></div></div>
           <div id="chartStage"><canvas id="fallbackCanvas"></canvas><div id="lightweightHost"></div><svg id="smcOverlay" xmlns="http://www.w3.org/2000/svg" aria-label="SMC indicator drawings"></svg><svg id="drawingOverlay" xmlns="http://www.w3.org/2000/svg" aria-label="Chart drawings"></svg><div id="drawingHint" class="drawing-hint hidden" role="status"><span id="drawingHintText"></span><button type="button" class="drawing-finish hidden" id="drawingHintFinish">Selesai</button><button type="button" id="drawingHintCancel" aria-label="Batalkan drawing">×</button></div><div id="drawingQuickBar" class="drawing-quick-bar hidden" role="toolbar" aria-label="Edit drawing"><span id="drawingSelectedName"></span><label class="drawing-quick-color" title="Warna garis"><input id="drawingQuickColor" type="color" value="#598eff" aria-label="Warna garis"></label><select id="drawingQuickWidth" class="drawing-quick-select" aria-label="Ketebalan garis" title="Ketebalan garis"><option value="1">1 px</option><option value="2">2 px</option><option value="3">3 px</option><option value="4">4 px</option><option value="5">5 px</option><option value="6">6 px</option><option value="7">7 px</option><option value="8">8 px</option><option value="9">9 px</option><option value="10">10 px</option><option value="11">11 px</option><option value="12">12 px</option><option value="13">13 px</option><option value="14">14 px</option><option value="15">15 px</option><option value="16">16 px</option><option value="17">17 px</option><option value="18">18 px</option><option value="19">19 px</option><option value="20">20 px</option></select><select id="drawingQuickDash" class="drawing-quick-select" aria-label="Gaya garis" title="Gaya garis"><option value="solid">Solid</option><option value="dashed">Dash</option><option value="dotted">Dot</option></select><button type="button" data-drawing-action="edit" title="Pengaturan objek" aria-label="Pengaturan objek"><svg><use href="#i-settings"/></svg></button><button type="button" data-drawing-action="lock" title="Kunci / lepas" aria-label="Kunci / lepas"><svg><use href="#i-lock"/></svg></button><button type="button" data-drawing-action="hide" title="Sembunyikan objek" aria-label="Sembunyikan objek"><svg><use href="#i-eye"/></svg></button><button type="button" data-drawing-action="duplicate" title="Duplikat" aria-label="Duplikat"><svg><use href="#i-copy"/></svg></button><button type="button" data-drawing-action="delete" title="Hapus" aria-label="Hapus"><svg><use href="#i-trash"/></svg></button><button type="button" data-drawing-action="close" title="Tutup seleksi" aria-label="Tutup seleksi"><svg><use href="#i-close"/></svg></button></div><div class="smc-notice hidden" id="smcNotice" role="status"></div><div class="chart-watermark"><span>◕</span><strong>LUMAVUN</strong></div><div class="mobile-scale-buttons mobile-only"><button type="button" id="mobileAuto" aria-label="Skala harga otomatis" title="Skala otomatis">A</button><button type="button" id="mobileLog" aria-label="Skala logaritmik" aria-pressed="false" title="Logaritmik">L</button></div><div id="chartLoader" class="chart-loader">Memuat data pasar...</div></div>
           <div id="replayControls" class="replay-controls hidden"><span>BAR REPLAY</span><button class="mini-btn" id="replayBack" title="Kembali 1 bar">◀</button><button class="mini-btn" id="replayPlay" title="Play"><svg><use href="#i-play"/></svg></button><button class="mini-btn" id="replayForward" title="Maju 1 bar">▶</button><span id="replayCounter">0 / 0</span><button class="mini-btn" id="replayExit">Selesai</button></div>
-          <div class="chart-footer"><div class="range-buttons"><button data-range="1d">1D</button><button data-range="5d">5D</button><button data-range="1m">1M</button><button data-range="3m">3M</button><button data-range="all" class="active">All</button></div><span id="chartClock">UTC</span><span class="chart-separator">|</span><span id="priceCurrency">USDT</span><button class="mini-btn" id="resetChart" title="Reset zoom">Auto</button></div>
+          <div class="chart-footer"><div class="range-buttons"><button type="button" data-range="1d">1D</button><button type="button" data-range="5d">5D</button><button type="button" data-range="1m">1M</button><button type="button" data-range="3m">3M</button><button type="button" data-range="6m">6M</button><button type="button" data-range="ytd">YTD</button><button type="button" data-range="1y">1Y</button><button type="button" data-range="5y">5Y</button><button type="button" data-range="all" class="active">All</button></div><span id="chartClock">UTC</span><span class="chart-separator">|</span><span id="priceCurrency">USDT</span><button class="mini-btn" id="resetChart" title="Reset zoom">Auto</button></div>
         </section>
         <div class="panel-resizer" id="panelResizer" title="Drag to resize bottom panel"></div>
         <section class="bottom-panel collapsed" id="bottomPanel">
