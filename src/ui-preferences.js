@@ -20,7 +20,7 @@ export const DEFAULT_UI_PREFS=Object.freeze({
  watchlistSort:'manual',
  showFavoritesBar:true,
  panelCollapsed:true,
- sidebarCollapsed:true
+ sidebarCollapsed:false
 });
 const safeList=(items,validate,max=80)=>{
  if(!Array.isArray(items))return [];
